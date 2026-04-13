@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}Momentum{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Momentum</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Products where both revenue and quantity grew in the selected period vs the equivalent prior period</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    {% set explain_page = 'momentum' %}{% include '_explain.html' %}
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-table" onclick="setView('table')">Table</button>
+      <button class="view-btn" id="btn-chart" onclick="setView('chart')">Chart</button>
+    </div>
+  </div>
+</div>
+
+{% include '_filter.html' %}
+
+<!-- Table view -->
+<div id="view-table">
+  <div class="card" style="overflow:hidden;">
+    {% if rows %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th class="r">Prior Period</th>
+          <th class="r">Current Period</th>
+          <th class="r">Rev Change</th>
+          <th class="r">Qty Change</th>
+          <th class="r">Combined Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+          <td class="r" style="color:#9ca3af;">KSH {{ '{:,.0f}'.format(r.prev_rev|float) }}</td>
+          <td class="r" style="font-weight:600;">KSH {{ '{:,.0f}'.format(r.curr_rev|float) }}</td>
+          <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.rev_chg }}%</td>
+          <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.qty_chg }}%</td>
+          <td class="r">
+            <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;font-family:monospace;">{{ r.score }}%</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No momentum data for this period. Need sales in both the current and prior period windows.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Chart view -->
+<div id="view-chart" style="display:none;">
+  <div class="g-chart">
+    <div class="card" style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Prior vs Current Revenue</div>
+      <canvas id="momBarChart" height="{% if rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+    </div>
+    <div class="card" style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Growth Score</div>
+      <canvas id="momScoreChart" height="200"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+const momData = {{ rows | tojson }};
+let chartsBuilt = false;
+
+function setView(v) {
+  document.getElementById('view-table').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('view-chart').style.display = v === 'chart' ? '' : 'none';
+  document.getElementById('btn-table').classList.toggle('active', v === 'table');
+  document.getElementById('btn-chart').classList.toggle('active', v === 'chart');
+  if (v === 'chart' && !chartsBuilt) buildCharts();
+}
+
+function buildCharts() {
+  chartsBuilt = true;
+  const labels = momData.map(r => r.product.length > 20 ? r.product.slice(0,20)+'…' : r.product);
+
+  // Grouped bar: prior vs current
+  new Chart(document.getElementById('momBarChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Prior Period', data:momData.map(r=>parseFloat(r.prev_rev)), backgroundColor:'rgba(135,90,123,.35)', borderColor:'#875a7b', borderWidth:1, borderRadius:3 },
+        { label:'Current Period', data:momData.map(r=>parseFloat(r.curr_rev)), backgroundColor:'rgba(5,150,105,.7)', borderColor:'#059669', borderWidth:1, borderRadius:3 },
+      ]
+    },
+    options: {
+      indexAxis:'y',
+      plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+      scales:{
+        x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},
+        y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+
+  // Horizontal bar for combined score
+  new Chart(document.getElementById('momScoreChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets:[{ label:'Score', data:momData.map(r=>parseFloat(r.score)), backgroundColor:'rgba(5,150,105,.7)', borderRadius:4 }]
+    },
+    options: {
+      indexAxis:'y',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.x+'%'}}},
+      scales:{
+        x:{min:0,max:200,ticks:{color:'#9ca3af',font:{size:11},callback:v=>v+'%'},grid:{color:'#f3f4f6'}},
+        y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

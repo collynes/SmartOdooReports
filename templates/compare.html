@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% block title %}Period Comparison{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Compare &amp; Forecast</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Compare periods side by side or view revenue projections</p>
+  </div>
+  <div style="display:flex;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:3px;gap:2px;">
+    <span style="padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);">Compare</span>
+    <a href="/projections" style="padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;color:#6b7280;text-decoration:none;transition:all .15s;" onmouseover="this.style.color='#875a7b'" onmouseout="this.style.color='#6b7280'">Projections</a>
+  </div>
+</div>
+
+{% set period_labels = {
+  'today':'Today','yesterday':'Yesterday',
+  'week':'This Week','lastweek':'Last Week',
+  'month':'This Month','lastmonth':'Last Month',
+  'quarter':'This Quarter','lastquarter':'Last Quarter',
+  'year':'This Year','lastyear':'Last Year',
+  'last30':'Last 30 Days','last90':'Last 90 Days',
+} %}
+
+<!-- Period selectors -->
+<div class="g-2col" style="margin-bottom:20px;">
+  <!-- Period A -->
+  <div class="card" style="padding:16px 18px;">
+    <div style="font-size:11px;font-weight:700;color:#875a7b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Period A</div>
+    <form method="GET" id="form-a">
+      <input type="hidden" name="b_period" value="{{ b_period }}">
+      <input type="hidden" name="b_from"   value="{{ b_from }}">
+      <input type="hidden" name="b_to"     value="{{ b_to }}">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+        {% for p in periods %}
+        <button type="submit" name="a_period" value="{{ p }}"
+          style="padding:4px 12px;border-radius:5px;font-size:12px;font-weight:500;border:1px solid {% if a_period == p %}#875a7b{% else %}#e5e7eb{% endif %};background:{% if a_period == p %}#875a7b{% else %}#f9fafb{% endif %};color:{% if a_period == p %}#fff{% else %}#6b7280{% endif %};cursor:pointer;">
+          {{ period_labels.get(p, p) }}
+        </button>
+        {% endfor %}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:#9ca3af;">Custom:</span>
+        <input type="date" name="a_from" value="{{ a_from }}"
+          style="border:1px solid #e5e7eb;border-radius:5px;padding:4px 8px;font-size:12px;"
+          onchange="document.getElementById('form-a').submit()">
+        <span style="font-size:12px;color:#9ca3af;">to</span>
+        <input type="date" name="a_to" value="{{ a_to }}"
+          style="border:1px solid #e5e7eb;border-radius:5px;padding:4px 8px;font-size:12px;"
+          onchange="document.getElementById('form-a').submit()">
+      </div>
+    </form>
+  </div>
+
+  <!-- Period B -->
+  <div class="card" style="padding:16px 18px;border-color:#c095b8;">
+    <div style="font-size:11px;font-weight:700;color:#714b67;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Period B</div>
+    <form method="GET" id="form-b">
+      <input type="hidden" name="a_period" value="{{ a_period }}">
+      <input type="hidden" name="a_from"   value="{{ a_from }}">
+      <input type="hidden" name="a_to"     value="{{ a_to }}">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+        {% for p in periods %}
+        <button type="submit" name="b_period" value="{{ p }}"
+          style="padding:4px 12px;border-radius:5px;font-size:12px;font-weight:500;border:1px solid {% if b_period == p %}#714b67{% else %}#e5e7eb{% endif %};background:{% if b_period == p %}#714b67{% else %}#f9fafb{% endif %};color:{% if b_period == p %}#fff{% else %}#6b7280{% endif %};cursor:pointer;">
+          {{ period_labels.get(p, p) }}
+        </button>
+        {% endfor %}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:#9ca3af;">Custom:</span>
+        <input type="date" name="b_from" value="{{ b_from }}"
+          style="border:1px solid #e5e7eb;border-radius:5px;padding:4px 8px;font-size:12px;"
+          onchange="document.getElementById('form-b').submit()">
+        <span style="font-size:12px;color:#9ca3af;">to</span>
+        <input type="date" name="b_to" value="{{ b_to }}"
+          style="border:1px solid #e5e7eb;border-radius:5px;padding:4px 8px;font-size:12px;"
+          onchange="document.getElementById('form-b').submit()">
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- KPI Comparison -->
+{% macro delta_badge(a, b) %}
+  {% if b|float > 0 %}
+    {% set pct = ((a|float - b|float) / b|float * 100)|round(1) %}
+    <span style="font-size:12px;font-weight:700;font-family:monospace;color:{% if pct >= 0 %}#059669{% else %}#dc2626{% endif %};">
+      {% if pct >= 0 %}+{% endif %}{{ pct }}%
+    </span>
+  {% else %}<span style="color:#9ca3af;font-size:12px;">—</span>{% endif %}
+{% endmacro %}
+
+<div class="g-4col" style="margin-bottom:20px;">
+  {% for metric, label, fmt_fn in [
+    ('revenue', 'Revenue', 'ksh'),
+    ('orders',  'Orders',  'int'),
+    ('avg_order','Avg Order','ksh'),
+    ('customers','Customers','int'),
+  ] %}
+  <div class="card" style="padding:16px 18px;">
+    <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">{{ label }}</div>
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:10px;color:#875a7b;font-weight:600;margin-bottom:2px;">{{ a_label }}</div>
+        <div style="font-size:18px;font-weight:700;color:#1f2937;">
+          {% if fmt_fn == 'ksh' %}KSH {{ '{:,.0f}'.format(a_kpi.get(metric, 0)|float) }}
+          {% else %}{{ a_kpi.get(metric, 0) }}{% endif %}
+        </div>
+      </div>
+      <div style="font-size:18px;color:#e5e7eb;">→</div>
+      <div>
+        <div style="font-size:10px;color:#714b67;font-weight:600;margin-bottom:2px;">{{ b_label }}</div>
+        <div style="font-size:18px;font-weight:700;color:#714b67;">
+          {% if fmt_fn == 'ksh' %}KSH {{ '{:,.0f}'.format(b_kpi.get(metric, 0)|float) }}
+          {% else %}{{ b_kpi.get(metric, 0) }}{% endif %}
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:8px;">{{ delta_badge(a_kpi.get(metric,0), b_kpi.get(metric,0)) }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Revenue chart overlay -->
+<div class="card" style="padding:18px 20px;margin-bottom:14px;">
+  <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Daily Revenue — {{ a_label }} vs {{ b_label }}</div>
+  <canvas id="cmpChart" height="80"></canvas>
+</div>
+
+<!-- Top products side by side -->
+<div class="g-2col">
+  <div class="card" style="overflow:hidden;">
+    <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:600;color:#875a7b;">Top Products — {{ a_label }}</div>
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Product</th><th class="r">Revenue</th><th class="r">Qty</th></tr></thead>
+      <tbody>
+        {% for r in a_prod %}
+        <tr>
+          <td style="color:#9ca3af;">{{ loop.index }}</td>
+          <td style="font-weight:500;">{{ r.product[:30] }}{% if r.product|length > 30 %}…{% endif %}</td>
+          <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</td>
+          <td class="r" style="color:#6b7280;">{{ '{:,.0f}'.format(r.qty|float) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" style="text-align:center;color:#9ca3af;padding:20px;">No data</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="overflow:hidden;">
+    <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:600;color:#714b67;">Top Products — {{ b_label }}</div>
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Product</th><th class="r">Revenue</th><th class="r">Qty</th></tr></thead>
+      <tbody>
+        {% for r in b_prod %}
+        <tr>
+          <td style="color:#9ca3af;">{{ loop.index }}</td>
+          <td style="font-weight:500;">{{ r.product[:30] }}{% if r.product|length > 30 %}…{% endif %}</td>
+          <td class="r" style="color:#714b67;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</td>
+          <td class="r" style="color:#6b7280;">{{ '{:,.0f}'.format(r.qty|float) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" style="text-align:center;color:#9ca3af;padding:20px;">No data</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const aData = {{ a_daily | tojson }};
+const bData = {{ b_daily | tojson }};
+
+// Normalise to index (day 1, day 2, ...) for overlay
+const aLabels = aData.map((_, i) => 'Day ' + (i+1));
+const bLabels = bData.map((_, i) => 'Day ' + (i+1));
+const maxLen = Math.max(aLabels.length, bLabels.length);
+const labels = Array.from({length: maxLen}, (_, i) => 'Day ' + (i+1));
+
+new Chart(document.getElementById('cmpChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: '{{ a_label }}',
+        data: aData.map(d => d.revenue),
+        borderColor: '#875a7b',
+        backgroundColor: 'rgba(135,90,123,.06)',
+        fill: true, tension: 0.35,
+        pointRadius: aData.length > 60 ? 0 : 3,
+        borderWidth: 2,
+      },
+      {
+        label: '{{ b_label }}',
+        data: bData.map(d => d.revenue),
+        borderColor: '#c095b8',
+        backgroundColor: 'rgba(192,149,184,.04)',
+        fill: false, tension: 0.35,
+        pointRadius: bData.length > 60 ? 0 : 3,
+        borderWidth: 2, borderDash: [5,3],
+      }
+    ]
+  },
+  options: {
+    plugins: {
+      legend: { labels: { color:'#6b7280', font:{size:12} } },
+      tooltip: { callbacks: { label: c => c.dataset.label + ': KSH ' + c.parsed.y.toLocaleString() } }
+    },
+    scales: {
+      x: { ticks:{color:'#9ca3af',font:{size:11},maxTicksLimit:15}, grid:{color:'#f3f4f6'} },
+      y: { ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()}, grid:{color:'#f3f4f6'} }
+    }
+  }
+});
+</script>
+{% endblock %}

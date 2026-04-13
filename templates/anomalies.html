@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% block title %}Anomalies & Stock{% endblock %}
+{% block content %}
+<style>
+  @keyframes pulse-border {
+    0%,100% { border-left-color: #dc2626; box-shadow: -2px 0 0 #dc2626; }
+    50%      { border-left-color: #f87171; box-shadow: -4px 0 10px rgba(220,38,38,.4); }
+  }
+  .anomaly-high { animation: pulse-border 2.2s ease-in-out infinite; }
+
+  .prob-arc { position:relative;display:flex;align-items:center;justify-content:center; }
+  .prob-arc svg { transform:rotate(-90deg); }
+  .prob-arc .prob-label { position:absolute;text-align:center; }
+
+  .cat-btn { padding:5px 14px;border-radius:6px;font-size:12.5px;font-weight:500;border:1px solid #e5e7eb;background:#f9fafb;color:#6b7280;cursor:pointer;transition:all .12s; }
+  .cat-btn:hover { border-color:#875a7b;color:#875a7b; }
+  .cat-btn.active { border-color:#875a7b;background:#875a7b;color:#fff; }
+
+  .page-tab { padding:8px 20px;border-radius:7px 7px 0 0;font-size:13.5px;font-weight:600;border:none;background:none;color:#6b7280;cursor:pointer;transition:all .15s;border-bottom:3px solid transparent; }
+  .page-tab.active { color:#875a7b;border-bottom-color:#875a7b;background:rgba(135,90,123,.06); }
+</style>
+
+<!-- Page header -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Anomalies &amp; Stock</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Suspicious patterns, dead stock and inventory alerts — all in one place</p>
+  </div>
+  <!-- Lookback (anomalies tab only) -->
+  <div id="lookback-wrap" style="display:flex;gap:6px;align-items:center;">
+    <span style="font-size:12px;color:#9ca3af;">Lookback:</span>
+    {% for d, lbl in [(30,'30d'),(60,'60d'),(90,'90d'),(180,'6mo'),(365,'1yr')] %}
+    <a href="/anomalies?lookback={{ d }}"
+       style="padding:4px 12px;border-radius:5px;font-size:12px;font-weight:500;border:1px solid {% if lookback == d %}#875a7b{% else %}#e5e7eb{% endif %};background:{% if lookback == d %}#875a7b{% else %}#f9fafb{% endif %};color:{% if lookback == d %}#fff{% else %}#6b7280{% endif %};text-decoration:none;">
+      {{ lbl }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Page-level tabs -->
+<div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:20px;">
+  <button class="page-tab active" id="ptab-anomalies" onclick="showPageTab('anomalies')">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:5px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    Anomaly Detection
+  </button>
+  <button class="page-tab" id="ptab-deadstock" onclick="showPageTab('deadstock')">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:5px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    Dead &amp; Stale Stock
+    {% if dead_rows %}<span style="background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:5px;">{{ dead_rows|length }}</span>{% endif %}
+  </button>
+</div>
+
+<!-- ══════════════════════════ ANOMALIES PANE ══════════════════════════ -->
+<div id="pane-anomalies">
+
+<!-- Summary stats -->
+{% set high_count   = items | selectattr('severity','eq','high')   | list | length %}
+{% set medium_count = items | selectattr('severity','eq','medium') | list | length %}
+<div style="display:grid;grid-template-columns:repeat(3,auto) 1fr;gap:10px;margin-bottom:18px;align-items:center;">
+  <div style="background:linear-gradient(135deg,#dc2626,#991b1b);border-radius:12px;padding:14px 22px;color:#fff;min-width:120px;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:3px;">High Severity</div>
+    <div style="font-size:28px;font-weight:800;line-height:1;" data-count-up="{{ high_count }}">{{ high_count }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#d97706,#b45309);border-radius:12px;padding:14px 22px;color:#fff;min-width:120px;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:3px;">Medium Severity</div>
+    <div style="font-size:28px;font-weight:800;line-height:1;" data-count-up="{{ medium_count }}">{{ medium_count }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#4f46e5,#3730a3);border-radius:12px;padding:14px 22px;color:#fff;min-width:120px;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:3px;">Total Found</div>
+    <div style="font-size:28px;font-weight:800;line-height:1;" data-count-up="{{ items | length }}">{{ items | length }}</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#9ca3af;padding-left:4px;">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Z-score analysis — not a guarantee
+  </div>
+</div>
+
+<!-- Category filter tabs -->
+{% set categories = items | map(attribute='category') | unique | list %}
+<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;" id="cat-filters">
+  <button onclick="filterCat('all')" class="cat-btn active" data-cat="all">All</button>
+  {% for cat in categories %}
+  <button onclick="filterCat('{{ cat }}')" class="cat-btn" data-cat="{{ cat }}">{{ cat }}</button>
+  {% endfor %}
+</div>
+
+{% if items %}
+<div style="display:flex;flex-direction:column;gap:10px;" id="anomaly-list">
+  {% for item in items %}
+  {% set prob_color = '#dc2626' if item.probability >= 80 else ('#d97706' if item.probability >= 60 else '#875a7b') %}
+  {% set circ_r = 22 %}
+  {% set circ_c = 28 %}
+  {% set circ_dash = (item.probability / 100 * 3.14159 * 2 * circ_r)|round(1) %}
+  {% set circ_total = (3.14159 * 2 * circ_r)|round(1) %}
+  <div class="anomaly-card card {% if item.severity == 'high' %}anomaly-high{% endif %}" data-cat="{{ item.category }}"
+       style="padding:16px 18px;display:flex;align-items:flex-start;gap:16px;border-left:4px solid {% if item.severity == 'high' %}#dc2626{% else %}#d97706{% endif %};">
+
+    <!-- Arc gauge -->
+    <div style="flex-shrink:0;text-align:center;width:66px;">
+      <div class="prob-arc" style="width:56px;height:56px;margin:0 auto;">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle cx="{{ circ_c }}" cy="{{ circ_c }}" r="{{ circ_r }}" fill="none" stroke="#f3f4f6" stroke-width="6"/>
+          <circle cx="{{ circ_c }}" cy="{{ circ_c }}" r="{{ circ_r }}" fill="none"
+            stroke="{{ prob_color }}" stroke-width="6"
+            stroke-dasharray="{{ circ_dash }} {{ circ_total }}"
+            stroke-linecap="round"
+            style="transform-origin:center;transform:rotate(-90deg);transition:stroke-dasharray .5s;"/>
+        </svg>
+        <div class="prob-label">
+          <div style="font-size:13px;font-weight:800;color:{{ prob_color }};line-height:1;">{{ item.probability }}%</div>
+        </div>
+      </div>
+      <div style="font-size:9px;color:#9ca3af;margin-top:3px;line-height:1.3;text-transform:uppercase;letter-spacing:.03em;">suspicion</div>
+    </div>
+
+    <!-- Content -->
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
+        <span style="background:{% if item.severity == 'high' %}#fee2e2{% else %}#fef3c7{% endif %};color:{% if item.severity == 'high' %}#991b1b{% else %}#92400e{% endif %};padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">
+          {{ item.severity }}
+        </span>
+        <span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600;">{{ item.category }}</span>
+        {% if item.date %}<span style="font-size:11px;color:#9ca3af;">{{ item.date }}</span>{% endif %}
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
+        <div style="font-size:14px;font-weight:700;color:#111827;line-height:1.3;">{{ item.title }}</div>
+        <button onclick="dismissAnomaly(this, {{ item.title | tojson }})"
+          style="flex-shrink:0;background:#f9fafb;border:1px solid #e5e7eb;color:#9ca3af;border-radius:6px;padding:3px 11px;font-size:11px;cursor:pointer;transition:all .1s;"
+          onmouseenter="this.style.background='#fee2e2';this.style.color='#dc2626';this.style.borderColor='#fca5a5'"
+          onmouseleave="this.style.background='#f9fafb';this.style.color='#9ca3af';this.style.borderColor='#e5e7eb'">
+          Dismiss
+        </button>
+      </div>
+      <div style="font-size:13px;color:#6b7280;line-height:1.55;">{{ item.detail }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:60px;">
+  <div style="font-size:40px;margin-bottom:12px;">✓</div>
+  <div style="font-size:16px;font-weight:700;color:#059669;margin-bottom:4px;">All Clear</div>
+  <div style="font-size:13px;color:#9ca3af;">No anomalies detected in the last {{ lookback }} days. Data looks clean.</div>
+</div>
+{% endif %}
+
+</div><!-- /pane-anomalies -->
+
+<!-- ══════════════════════════ DEAD STOCK PANE ══════════════════════════ -->
+<div id="pane-deadstock" style="display:none;">
+
+{% if dead_rows %}
+{% set total_value = dead_rows | sum(attribute='stock_value', start=0) %}
+{% set never_sold  = dead_rows | selectattr('status','eq','NEVER SOLD') | list | length %}
+{% set dead_count  = dead_rows | selectattr('status','eq','DEAD (90+ days)') | list | length %}
+{% set stale_count = dead_rows | selectattr('status','eq','STALE (60+ days)') | list | length %}
+
+<!-- Summary cards -->
+<div class="g-4col" style="margin-bottom:20px;">
+  <div style="background:linear-gradient(135deg,#dc2626,#991b1b);border-radius:12px;padding:16px 18px;color:#fff;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Tied-up Capital</div>
+    <div style="font-size:20px;font-weight:800;line-height:1;">KSH {{ '{:,.0f}'.format(total_value|float) }}</div>
+    <div style="font-size:11px;opacity:.7;margin-top:3px;">{{ dead_rows|length }} products</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#7c3aed,#5b21b6);border-radius:12px;padding:16px 18px;color:#fff;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Never Sold</div>
+    <div style="font-size:28px;font-weight:800;line-height:1;" data-count-up="{{ never_sold }}">{{ never_sold }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);border-radius:12px;padding:16px 18px;color:#fff;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Dead (90+ days)</div>
+    <div style="font-size:28px;font-weight:800;line-height:1;" data-count-up="{{ dead_count }}">{{ dead_count }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#d97706,#b45309);border-radius:12px;padding:16px 18px;color:#fff;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Stale (60+ days)</div>
+    <div style="font-size:28px;font-weight:800;line-height:1;" data-count-up="{{ stale_count }}">{{ stale_count }}</div>
+  </div>
+</div>
+
+<!-- Dead stock cards grid -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">
+  {% for r in dead_rows %}
+  {% set status_color = '#dc2626' if r.status in ['NEVER SOLD','DEAD (90+ days)'] else ('#d97706' if r.status == 'STALE (60+ days)' else '#6b7280') %}
+  {% set days = r.days_since_sale %}
+  {% set idle_pct = [((days or 999) / 365 * 100), 100]|min if days else 100 %}
+  <div class="card" style="padding:16px 18px;border-left:4px solid {{ status_color }};">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13.5px;font-weight:700;color:#111827;line-height:1.3;margin-bottom:4px;">{{ r.product }}</div>
+        <div style="font-size:11px;color:#9ca3af;">{{ '{:,.0f}'.format(r.qty_on_hand|float) }} units in stock</div>
+      </div>
+      <span style="background:{{ status_color }};color:#fff;padding:2px 9px;border-radius:5px;font-size:10px;font-weight:700;text-transform:uppercase;flex-shrink:0;white-space:nowrap;">
+        {% if r.status == 'NEVER SOLD' %}Never Sold
+        {% elif r.status == 'DEAD (90+ days)' %}Dead Stock
+        {% elif r.status == 'STALE (60+ days)' %}Stale
+        {% else %}Slow{% endif %}
+      </span>
+    </div>
+
+    <!-- Stats row -->
+    <div style="display:flex;gap:16px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Value at Cost</div>
+        <div style="font-size:15px;font-weight:700;color:#dc2626;">KSH {{ '{:,.0f}'.format(r.stock_value|float) }}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Last Sale</div>
+        <div style="font-size:13px;font-weight:600;color:#374151;">{{ r.last_sale_date or 'Never' }}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Days Idle</div>
+        <div style="font-size:15px;font-weight:700;color:{{ status_color }};">{{ r.days_since_sale or '∞' }}</div>
+      </div>
+    </div>
+
+    <!-- Idle bar -->
+    <div style="background:#f3f4f6;border-radius:3px;height:4px;">
+      <div style="background:{{ status_color }};border-radius:3px;height:4px;width:{{ idle_pct|round }}%;transition:width .4s;"></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="card" style="text-align:center;padding:60px;">
+  <div style="font-size:40px;margin-bottom:12px;">📦</div>
+  <div style="font-size:16px;font-weight:700;color:#059669;margin-bottom:4px;">Inventory Moving Well</div>
+  <div style="font-size:13px;color:#9ca3af;">No dead or stale stock found — all products have recent sales activity.</div>
+</div>
+{% endif %}
+
+</div><!-- /pane-deadstock -->
+
+<script>
+function dismissAnomaly(btn, title) {
+  fetch('/anomalies/dismiss', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({title})})
+    .then(() => { btn.closest('.anomaly-card').remove(); });
+}
+function filterCat(cat) {
+  document.querySelectorAll('.cat-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.cat === cat);
+  });
+  document.querySelectorAll('.anomaly-card').forEach(card => {
+    card.style.display = (cat === 'all' || card.dataset.cat === cat) ? '' : 'none';
+  });
+}
+function showPageTab(name) {
+  ['anomalies','deadstock'].forEach(t => {
+    document.getElementById('pane-'+t).style.display = t === name ? '' : 'none';
+    document.getElementById('ptab-'+t).classList.toggle('active', t === name);
+  });
+  document.getElementById('lookback-wrap').style.display = name === 'anomalies' ? '' : 'none';
+}
+</script>
+{% endblock %}

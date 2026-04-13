@@ -1,0 +1,860 @@
+{% extends "base.html" %}
+{% block title %}P&L Dashboard{% endblock %}
+
+{% block content %}
+<style>
+  .stat-value { font-size:1.5rem;font-weight:700;line-height:1.2; }
+  .stat-sub   { font-size:0.78rem;color:#9ca3af;margin-top:4px; }
+  .kpi-accent { width:4px;border-radius:2px;flex-shrink:0;min-height:46px; }
+
+  .ct-wrap  { display:flex;border:1.5px solid #e5e7eb;border-radius:6px;overflow:hidden; }
+  .ct-btn   { padding:3px 10px;font-size:12px;font-weight:500;background:#fff;color:#9ca3af;border:none;cursor:pointer;transition:all .12s; }
+  .ct-btn+.ct-btn { border-left:1.5px solid #e5e7eb; }
+  .ct-btn:hover  { background:#f5f0f4;color:#875a7b; }
+  .ct-btn.active { background:#875a7b;color:#fff; }
+
+  .anal-kpi-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:24px; }
+  @media(min-width:768px)  { .anal-kpi-grid { grid-template-columns:repeat(3,1fr); } }
+  @media(min-width:1100px) { .anal-kpi-grid { grid-template-columns:repeat(6,1fr); } }
+
+  .chart-grid-2 { display:grid;grid-template-columns:1fr;gap:18px;margin-bottom:18px; }
+  @media(min-width:900px) { .chart-grid-2 { grid-template-columns:1.6fr 1fr; } }
+
+  .pnl-donuts-row { display:grid;grid-template-columns:1fr;gap:18px;margin-bottom:18px; }
+  @media(min-width:600px) { .pnl-donuts-row { grid-template-columns:repeat(3,1fr); } }
+
+  .anal-data-table { width:100%;border-collapse:collapse;font-size:13px; }
+  .anal-data-table th { padding:11px 14px;text-align:left;background:#f9fafb;color:#6b7280;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #e5e7eb; }
+  .anal-data-table td { padding:11px 14px;border-bottom:1px solid #f3f4f6;color:#374151;line-height:1.4; }
+  .anal-data-table tr:hover td { background:#fafafa; }
+  .anal-data-table tr.totals-row td { font-weight:700;background:linear-gradient(90deg,#faf5fa,#f5f0f4);border-top:2px solid #875a7b;border-bottom:none;color:#3d2645; }
+  .tr { text-align:right; }
+
+  .stock-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:10px; }
+  @media(min-width:600px)  { .stock-grid { grid-template-columns:repeat(3,1fr); } }
+  @media(min-width:900px)  { .stock-grid { grid-template-columns:repeat(4,1fr); } }
+  @media(min-width:1200px) { .stock-grid { grid-template-columns:repeat(5,1fr); } }
+  .stock-item { background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px; }
+  .stock-name { font-size:0.78rem;font-weight:600;color:#374151;margin-bottom:5px;line-height:1.3; }
+  .stock-qty  { font-size:0.7rem;color:#9ca3af; }
+  .stock-val  { font-size:0.95rem;font-weight:700;color:#017E84;margin-top:3px; }
+  .stock-margin { font-size:0.68rem;color:#16a34a;font-weight:500;margin-top:2px; }
+
+  .dir-card   { background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden; }
+  .dir-card .ch { padding:14px 18px;color:#fff;font-weight:600; }
+  .dir-card .cb { padding:16px 18px; }
+  .dir-amount { font-size:1.5rem;font-weight:700; }
+  .dir-grid   { display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:16px; }
+  @media(min-width:700px) { .dir-grid { grid-template-columns:repeat(3,1fr); } }
+
+  .badge-profit { background:#d1fae5;color:#065f46;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600; }
+  .badge-loss   { background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600; }
+
+  .spinner { width:26px;height:26px;border:3px solid #e5e7eb;border-top-color:#875a7b;border-radius:50%;animation:spin .7s linear infinite;margin:28px auto;display:block; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .donut-wrap { display:flex;gap:16px;align-items:center;flex-wrap:wrap; }
+  .donut-center { position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none; }
+  .donut-legend { display:flex;flex-direction:column;gap:6px;font-size:12px;flex:1;min-width:110px; }
+  .donut-legend-item { display:flex;align-items:center;justify-content:space-between;gap:8px; }
+  .donut-legend-dot  { width:9px;height:9px;border-radius:50%;flex-shrink:0; }
+
+  .anal-tab { padding:9px 22px;border-radius:8px;font-size:13px;font-weight:600;border:none;background:none;color:#6b7280;cursor:pointer;transition:all .15s; white-space:nowrap; }
+  .anal-tab.active { background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;box-shadow:0 3px 10px rgba(135,90,123,.35); }
+  .anal-tab:hover:not(.active) { background:#f3e8f1;color:#875a7b; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  .card-header-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px; }
+  .card-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin-bottom:6px; }
+</style>
+
+<!-- Page header -->
+<div style="margin-bottom:20px;">
+  <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">P&amp;L Dashboard</h1>
+  <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Revenue, costs and profit — full business overview</p>
+</div>
+
+<!-- Toolbar: tabs + year filter -->
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:22px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;">
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <div style="display:flex;gap:8px;min-width:max-content;">
+      <button class="anal-tab active" onclick="switchTab('overview',this)">Overview</button>
+      <button class="anal-tab" onclick="switchTab('products',this)">Products &amp; Stock</button>
+      <button class="anal-tab" onclick="switchTab('directors',this)">
+        Directors Share
+        <span id="dir-tab-label" style="font-size:11px;opacity:.7;margin-left:4px;">{{ split_shop }}/{{ split_kemboi }}/{{ split_mutai }}%</span>
+      </button>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px;flex-shrink:0;">
+    <button class="period-btn active" onclick="setYear('all',this)">All</button>
+    <button class="period-btn" onclick="setYear('2025',this)">2025</button>
+    <button class="period-btn" onclick="setYear('2026',this)">2026</button>
+  </div>
+</div>
+
+<!-- ═══════ TAB: OVERVIEW ═══════ -->
+<div id="tab-overview" class="tab-content active">
+
+  <!-- KPI tiles -->
+  <div class="anal-kpi-grid">
+    <div class="card" style="padding:20px 18px;border-top:3px solid #017E84;">
+      <div class="card-label">Revenue</div>
+      <div class="stat-value" id="kpi-revenue" style="color:#017E84">—</div>
+      <div id="kpi-rev-sub" class="stat-sub"></div>
+    </div>
+    <div class="card" style="padding:20px 18px;border-top:3px solid #F77E53;">
+      <div class="card-label">COGS</div>
+      <div class="stat-value" id="kpi-cogs" style="color:#F77E53">—</div>
+      <div class="stat-sub">Cost of goods sold</div>
+    </div>
+    <div class="card" style="padding:20px 18px;border-top:3px solid #875a7b;">
+      <div class="card-label">Operating Expenses</div>
+      <div class="stat-value" id="kpi-opex" style="color:#875a7b">—</div>
+      <div class="stat-sub">Rent, salaries, utilities…</div>
+    </div>
+    <div class="card" style="padding:20px 18px;border-top:3px solid #E67E22;">
+      <div class="card-label">Stock Imports</div>
+      <div class="stat-value" id="kpi-imports" style="color:#E67E22">—</div>
+      <div class="stat-sub">ChinaLand &amp; Kaboww</div>
+    </div>
+    <div class="card" style="padding:20px 18px;border-top:3px solid #16a34a;">
+      <div class="card-label">Net Profit</div>
+      <div class="stat-value" id="kpi-net">—</div>
+      <div class="stat-sub">Revenue − COGS − OpEx</div>
+    </div>
+    <div class="card" style="padding:20px 18px;border-top:3px solid #4f46e5;">
+      <div class="card-label">Best Month</div>
+      <div class="stat-value" id="kpi-best" style="color:#4f46e5;font-size:1.1rem;">—</div>
+      <div class="stat-sub" id="kpi-best-rev"></div>
+    </div>
+  </div>
+
+  <!-- P&L summary donuts -->
+  <div class="pnl-donuts-row">
+    <div class="card p-5" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="card-label" style="align-self:flex-start;">Revenue Composition</div>
+      <div style="position:relative;width:130px;height:130px;flex-shrink:0;">
+        <canvas id="revDonutChart" width="130" height="130"></canvas>
+        <div class="donut-center">
+          <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
+          <div id="rev-donut-total" style="font-size:13px;font-weight:700;color:#017E84;"></div>
+        </div>
+      </div>
+      <div class="donut-legend" id="rev-donut-legend" style="width:100%;"></div>
+    </div>
+    <div class="card p-5" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="card-label" style="align-self:flex-start;">Gross Profit Usage</div>
+      <div style="position:relative;width:130px;height:130px;flex-shrink:0;">
+        <canvas id="grossDonutChart" width="130" height="130"></canvas>
+        <div class="donut-center">
+          <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Gross</div>
+          <div id="gross-donut-total" style="font-size:13px;font-weight:700;color:#16a34a;"></div>
+        </div>
+      </div>
+      <div class="donut-legend" id="gross-donut-legend" style="width:100%;"></div>
+    </div>
+    <div class="card p-5" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div class="card-label" style="align-self:flex-start;">Net Profit by Month</div>
+      <div style="position:relative;width:130px;height:130px;flex-shrink:0;">
+        <canvas id="netDonutChart" width="130" height="130"></canvas>
+        <div class="donut-center">
+          <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Net</div>
+          <div id="net-donut-total" style="font-size:13px;font-weight:700;color:#16a34a;"></div>
+        </div>
+      </div>
+      <div class="donut-legend" id="net-donut-legend" style="width:100%;"></div>
+    </div>
+  </div>
+
+  <!-- Monthly P&L chart + Expense donut -->
+  <div class="chart-grid-2">
+    <div class="card p-5">
+      <div class="card-header-row">
+        <div class="card-label" style="margin:0;">Monthly P&amp;L</div>
+        <div class="ct-wrap">
+          <button class="ct-btn active" id="pnl-btn-bar"   onclick="setPnlView('bar',this)">Bar</button>
+          <button class="ct-btn"        id="pnl-btn-donut" onclick="setPnlView('donut',this)">Donut</button>
+        </div>
+      </div>
+      <div id="pnl-bar-view"><canvas id="pnlChart" height="240"></canvas></div>
+      <div id="pnl-donut-view" style="display:none;">
+        <div class="donut-wrap" style="justify-content:center;padding:10px 0;">
+          <div style="position:relative;width:200px;height:200px;flex-shrink:0;">
+            <canvas id="pnlDonutChart" width="200" height="200"></canvas>
+            <div class="donut-center">
+              <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
+              <div id="pnl-donut-total" style="font-size:13px;font-weight:700;color:#017E84;"></div>
+            </div>
+          </div>
+          <div class="donut-legend" id="pnl-donut-legend"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card p-5" style="display:flex;flex-direction:column;">
+      <div class="card-label">Expense Breakdown</div>
+      <div class="donut-wrap" style="flex:1;align-items:center;">
+        <div style="position:relative;flex-shrink:0;width:170px;height:170px;">
+          <canvas id="expDonutChart" width="170" height="170"></canvas>
+          <div class="donut-center">
+            <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total OpEx</div>
+            <div id="donut-total" style="font-size:13px;font-weight:700;color:#875a7b;"></div>
+          </div>
+        </div>
+        <div class="donut-legend" id="exp-legend" style="min-width:120px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P&L detail table -->
+  <div class="card p-5">
+    <div class="card-label">Monthly P&amp;L Detail</div>
+    <div style="overflow-x:auto;max-height:400px;overflow-y:auto;">
+      <table class="anal-data-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="tr">Revenue</th>
+            <th class="tr">COGS</th>
+            <th class="tr">Gross Profit</th>
+            <th class="tr">OpEx</th>
+            <th class="tr">Net Profit</th>
+            <th class="tr">Margin</th>
+          </tr>
+        </thead>
+        <tbody id="pnl-tbody"><tr><td colspan="7"><span class="spinner"></span></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: PRODUCTS & STOCK ═══════ -->
+<div id="tab-products" class="tab-content">
+  <div class="chart-grid-2" style="margin-bottom:16px;">
+    <div class="card p-5">
+      <div class="card-header-row">
+        <div class="card-label" style="margin:0;">Top 15 Products by Revenue</div>
+        <div class="ct-wrap">
+          <button class="ct-btn active" id="top-btn-bar"   onclick="setTopView('bar',this)">Bar</button>
+          <button class="ct-btn"        id="top-btn-donut" onclick="setTopView('donut',this)">Donut</button>
+        </div>
+      </div>
+      <div id="top-bar-view"><canvas id="topProdChart" height="320"></canvas></div>
+      <div id="top-donut-view" style="display:none;">
+        <div class="donut-wrap" style="justify-content:center;padding:10px 0;">
+          <div style="position:relative;width:200px;height:200px;flex-shrink:0;">
+            <canvas id="topProdDonutChart" width="200" height="200"></canvas>
+            <div class="donut-center">
+              <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
+              <div id="top-donut-total" style="font-size:13px;font-weight:700;color:#017E84;"></div>
+            </div>
+          </div>
+          <div class="donut-legend" id="top-donut-legend"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card p-5" style="display:flex;flex-direction:column;">
+      <div class="card-label">Stock Value Distribution (Top 10)</div>
+      <div class="donut-wrap" style="flex:1;align-items:center;">
+        <div style="position:relative;flex-shrink:0;width:160px;height:160px;">
+          <canvas id="stockDonutChart" width="160" height="160"></canvas>
+          <div class="donut-center">
+            <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total Value</div>
+            <div id="stock-total-label" style="font-size:13px;font-weight:700;color:#017E84;"></div>
+          </div>
+        </div>
+        <div class="donut-legend" id="stock-donut-legend" style="min-width:130px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card p-5">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div class="card-label" id="stock-count-title" style="margin:0;">Current Stock</div>
+      <div id="stock-summary-pills" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+    <div id="stock-grid-container"><span class="spinner"></span></div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: DIRECTORS SHARE ═══════ -->
+<div id="tab-directors" class="tab-content">
+  <div class="card p-5 mb-5" style="border-left:4px solid #875a7b;">
+    <p style="color:#6b7280;font-size:13.5px;margin:0;">
+      <strong style="color:#875a7b;">Distribution Rule:</strong>
+      Net profit from profitable months is split —
+      <strong><span id="dir-rule-shop">{{ split_shop }}</span>% Shop reinvestment</strong>,
+      <strong><span id="dir-rule-kemboi">{{ split_kemboi }}</span>% Kemboi Family</strong>,
+      <strong><span id="dir-rule-mutai">{{ split_mutai }}</span>% Mutai Family</strong>.
+      Loss months are absorbed by the shop.
+      <a href="/profile" style="color:#875a7b;font-weight:600;margin-left:8px;font-size:12px;">Edit split →</a>
+    </p>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="dir-grid">
+    <div class="dir-card">
+      <div class="ch" style="background:#875a7b;">
+        <div>Shop Reinvestment</div>
+        <div id="dir-card-shop-pct" style="font-size:11px;opacity:0.8;">{{ split_shop }}% stays in business</div>
+      </div>
+      <div class="cb">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div class="card-label">Cumulative Share</div>
+            <div class="dir-amount" id="dir-shop" style="color:#875a7b;">—</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="card-label">Avg / Month</div>
+            <div id="dir-shop-avg" style="font-size:1rem;font-weight:600;color:#9ca3af;">—</div>
+          </div>
+        </div>
+        <div id="dir-shop-months" style="font-size:11px;color:#9ca3af;margin-top:8px;"></div>
+      </div>
+    </div>
+    <div class="dir-card">
+      <div class="ch" style="background:#017E84;">
+        <div>Kemboi Family</div>
+        <div id="dir-card-kemboi-pct" style="font-size:11px;opacity:0.8;">50% ownership · {{ split_kemboi }}% profits</div>
+      </div>
+      <div class="cb">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div class="card-label">Cumulative Share</div>
+            <div class="dir-amount" id="dir-kemboi" style="color:#017E84;">—</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="card-label">Avg / Month</div>
+            <div id="dir-kemboi-avg" style="font-size:1rem;font-weight:600;color:#9ca3af;">—</div>
+          </div>
+        </div>
+        <div id="dir-kemboi-months" style="font-size:11px;color:#9ca3af;margin-top:8px;"></div>
+      </div>
+    </div>
+    <div class="dir-card">
+      <div class="ch" style="background:#F77E53;">
+        <div>Mutai Family</div>
+        <div id="dir-card-mutai-pct" style="font-size:11px;opacity:0.8;">50% ownership · {{ split_mutai }}% profits</div>
+      </div>
+      <div class="cb">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div class="card-label">Cumulative Share</div>
+            <div class="dir-amount" id="dir-mutai" style="color:#F77E53;">—</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="card-label">Avg / Month</div>
+            <div id="dir-mutai-avg" style="font-size:1rem;font-weight:600;color:#9ca3af;">—</div>
+          </div>
+        </div>
+        <div id="dir-mutai-months" style="font-size:11px;color:#9ca3af;margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="chart-grid-2">
+    <div class="card p-5">
+      <div class="card-header-row">
+        <div class="card-label" style="margin:0;">Cumulative Earnings (KES)</div>
+        <div class="ct-wrap">
+          <button class="ct-btn active" id="dir-btn-line"  onclick="setDirCumView('line',this)">Line</button>
+          <button class="ct-btn"        id="dir-btn-donut" onclick="setDirCumView('donut',this)">Donut</button>
+        </div>
+      </div>
+      <div id="dir-line-view"><canvas id="dirCumChart" height="200"></canvas></div>
+      <div id="dir-donut-view" style="display:none;">
+        <div class="donut-wrap" style="justify-content:center;padding:10px 0;">
+          <div style="position:relative;width:190px;height:190px;flex-shrink:0;">
+            <canvas id="dirSplitDonutChart" width="190" height="190"></canvas>
+            <div class="donut-center">
+              <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total</div>
+              <div id="dir-split-total" style="font-size:13px;font-weight:700;color:#875a7b;"></div>
+            </div>
+          </div>
+          <div class="donut-legend" id="dir-split-legend"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card p-5">
+      <div class="card-header-row">
+        <div class="card-label" style="margin:0;">Monthly Profit Distribution</div>
+        <div class="ct-wrap">
+          <button class="ct-btn active" id="dirmon-btn-bar"   onclick="setDirMonView('bar',this)">Bar</button>
+          <button class="ct-btn"        id="dirmon-btn-donut" onclick="setDirMonView('donut',this)">Donut</button>
+        </div>
+      </div>
+      <div id="dirmon-bar-view"><canvas id="dirMonBarChart" height="200"></canvas></div>
+      <div id="dirmon-donut-view" style="display:none;">
+        <div class="donut-wrap" style="justify-content:center;padding:10px 0;">
+          <div style="position:relative;width:180px;height:180px;flex-shrink:0;">
+            <canvas id="dirMonDonutChart" width="180" height="180"></canvas>
+            <div class="donut-center">
+              <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Net Profit</div>
+              <div id="dirmon-donut-total" style="font-size:13px;font-weight:700;color:#16a34a;"></div>
+            </div>
+          </div>
+          <div class="donut-legend" id="dirmon-donut-legend"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly distribution table -->
+  <div class="card p-5">
+    <div class="card-label">Monthly Director Distribution</div>
+    <div style="overflow-x:auto;">
+      <table class="anal-data-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="tr">Revenue</th>
+            <th class="tr">Net Profit</th>
+            <th class="tr">Status</th>
+            <th id="dir-th-shop"   class="tr" style="color:#875a7b;">Shop ({{ split_shop }}%)</th>
+            <th id="dir-th-kemboi" class="tr" style="color:#017E84;">Kemboi ({{ split_kemboi }}%)</th>
+            <th id="dir-th-mutai"  class="tr" style="color:#F77E53;">Mutai ({{ split_mutai }}%)</th>
+          </tr>
+        </thead>
+        <tbody id="dir-tbody"><tr><td colspan="7"><span class="spinner"></span></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const KES = v => 'KES ' + Number(v).toLocaleString('en-KE', {minimumFractionDigits:0, maximumFractionDigits:0});
+const C = { purple:'#875a7b', teal:'#017E84', orange:'#F77E53', green:'#16a34a', red:'#dc2626', blue:'#4f46e5', yellow:'#E67E22', gray:'#9ca3af' };
+const PAL = [C.purple,C.teal,C.orange,C.green,C.blue,C.yellow,C.red,C.gray,'#9B59B6','#1ABC9C','#2ECC71','#E74C3C'];
+
+let activeYear = 'all';
+let pnlBarInst, pnlDonutInst, expDonutInst;
+let revDonutInst, grossDonutInst, netDonutInst;
+let topProdBarInst, topProdDonutInst;
+let stockDonutInst;
+let dirCumInst, dirSplitDonutInst, dirMonBarInst, dirMonDonutInst;
+let _pnlData = [], _topData = [], _dirData = null;
+let _pnlView = 'bar', _topView = 'bar', _dirCumView = 'line', _dirMonView = 'bar';
+
+function yearParam() { return activeYear === 'all' ? '' : `?year=${activeYear}`; }
+function destroyChart(inst) { if (inst) { try { inst.destroy(); } catch(e){} } return null; }
+
+function buildDonut(canvasId, labels, values, colors, opts = {}) {
+  const total = values.reduce((a,b) => a+b, 0);
+  return new Chart(document.getElementById(canvasId).getContext('2d'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+      cutout: opts.cutout || '65%',
+      responsive: opts.responsive !== false ? false : true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ` ${c.label}: ${KES(c.parsed)} (${total>0?Math.round(c.parsed/total*100):0}%)` } }
+      }
+    }
+  });
+}
+
+function buildDonutLegend(elId, labels, values, colors) {
+  const total = values.reduce((a,b) => a+b, 0);
+  document.getElementById(elId).innerHTML = labels.map((lbl, i) => {
+    const pct = total > 0 ? Math.round(values[i] / total * 100) : 0;
+    return `<div class="donut-legend-item">
+      <div style="display:flex;align-items:center;gap:5px;min-width:0;">
+        <div class="donut-legend-dot" style="background:${colors[i]};"></div>
+        <span style="color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${lbl}</span>
+      </div>
+      <div style="display:flex;gap:5px;flex-shrink:0;">
+        <span style="color:#9ca3af;">${pct}%</span>
+        <span style="font-weight:600;color:#374151;">${KES(values[i])}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function activateCt(btn) {
+  btn.closest('.ct-wrap').querySelectorAll('.ct-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function setPnlView(v, btn) {
+  _pnlView = v; activateCt(btn);
+  document.getElementById('pnl-bar-view').style.display   = v === 'bar'   ? '' : 'none';
+  document.getElementById('pnl-donut-view').style.display = v === 'donut' ? '' : 'none';
+  if (v === 'donut') renderPnlDonut();
+}
+function setTopView(v, btn) {
+  _topView = v; activateCt(btn);
+  document.getElementById('top-bar-view').style.display   = v === 'bar'   ? '' : 'none';
+  document.getElementById('top-donut-view').style.display = v === 'donut' ? '' : 'none';
+  if (v === 'donut') renderTopDonut();
+}
+function setDirCumView(v, btn) {
+  _dirCumView = v; activateCt(btn);
+  document.getElementById('dir-line-view').style.display  = v === 'line'  ? '' : 'none';
+  document.getElementById('dir-donut-view').style.display = v === 'donut' ? '' : 'none';
+  if (v === 'donut') renderDirSplitDonut();
+}
+function setDirMonView(v, btn) {
+  _dirMonView = v; activateCt(btn);
+  document.getElementById('dirmon-bar-view').style.display   = v === 'bar'   ? '' : 'none';
+  document.getElementById('dirmon-donut-view').style.display = v === 'donut' ? '' : 'none';
+  if (v === 'donut') renderDirMonDonut();
+}
+
+function renderPnlDonut() {
+  pnlDonutInst = destroyChart(pnlDonutInst);
+  if (!_pnlData.length) return;
+  const top = [..._pnlData].sort((a,b) => b.revenue - a.revenue).slice(0, 8);
+  const total = _pnlData.reduce((s,r) => s + (r.revenue||0), 0);
+  document.getElementById('pnl-donut-total').textContent = KES(total);
+  pnlDonutInst = buildDonut('pnlDonutChart', top.map(r=>r.month), top.map(r=>r.revenue||0), PAL);
+  buildDonutLegend('pnl-donut-legend', top.map(r=>r.month), top.map(r=>r.revenue||0), PAL);
+}
+function renderTopDonut() {
+  topProdDonutInst = destroyChart(topProdDonutInst);
+  if (!_topData.length) return;
+  const top10 = _topData.slice(0, 10);
+  const total = _topData.reduce((s,r) => s + (r.revenue||0), 0);
+  document.getElementById('top-donut-total').textContent = KES(total);
+  const labels = top10.map(r => r.name && r.name.length>20 ? r.name.substring(0,20)+'…' : (r.name||'—'));
+  topProdDonutInst = buildDonut('topProdDonutChart', labels, top10.map(r=>r.revenue||0), PAL);
+  buildDonutLegend('top-donut-legend', labels, top10.map(r=>r.revenue||0), PAL);
+}
+function renderDirSplitDonut() {
+  dirSplitDonutInst = destroyChart(dirSplitDonutInst);
+  if (!_dirData) return;
+  const { totals } = _dirData;
+  const vals = [totals.shop||0, totals.kemboi||0, totals.mutai||0];
+  const total = vals.reduce((a,b) => a+b, 0);
+  document.getElementById('dir-split-total').textContent = KES(total);
+  dirSplitDonutInst = buildDonut('dirSplitDonutChart', ['Shop', 'Kemboi', 'Mutai'], vals, [C.purple, C.teal, C.orange]);
+  buildDonutLegend('dir-split-legend', ['Shop Reinvestment', 'Kemboi Family', 'Mutai Family'], vals, [C.purple, C.teal, C.orange]);
+}
+function renderDirMonDonut() {
+  dirMonDonutInst = destroyChart(dirMonDonutInst);
+  if (!_dirData) return;
+  const { rows, totals } = _dirData;
+  const profRows = rows.filter(r => r.net_profit > 0).sort((a,b) => b.net_profit - a.net_profit).slice(0, 8);
+  const total = profRows.reduce((s,r) => s + r.net_profit, 0);
+  document.getElementById('dirmon-donut-total').textContent = KES(totals.net_profit||0);
+  if (profRows.length) {
+    dirMonDonutInst = buildDonut('dirMonDonutChart', profRows.map(r=>r.month), profRows.map(r=>r.net_profit), PAL);
+    buildDonutLegend('dirmon-donut-legend', profRows.map(r=>r.month), profRows.map(r=>r.net_profit), PAL);
+  } else {
+    document.getElementById('dirmon-donut-legend').innerHTML = '<div style="color:#9ca3af;font-size:12px;">No profitable months</div>';
+  }
+}
+
+function setYear(yr, btn) {
+  activeYear = yr;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadOverview();
+  if (window._productsLoaded)  { window._productsLoaded  = false; loadProducts(); }
+  if (window._directorsLoaded) { window._directorsLoaded = false; loadDirectors(); }
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.anal-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'products'  && !window._productsLoaded)  loadProducts();
+  if (name === 'directors' && !window._directorsLoaded) loadDirectors();
+}
+
+async function loadOverview() {
+  const [s, pnl, expCats] = await Promise.all([
+    fetch('/api/summary'             + yearParam()).then(r => r.json()).catch(() => ({})),
+    fetch('/api/pnl'                 + yearParam()).then(r => r.json()).catch(() => []),
+    fetch('/api/analytics-expenses'  + yearParam()).then(r => r.json()).catch(() => []),
+  ]);
+  _pnlData = pnl || [];
+
+  document.getElementById('kpi-revenue').textContent = KES(s.total_revenue || 0);
+  document.getElementById('kpi-cogs').textContent    = KES(s.total_cogs    || 0);
+  document.getElementById('kpi-opex').textContent    = KES(s.total_opex    || 0);
+  document.getElementById('kpi-imports').textContent = KES(s.total_imports || 0);
+
+  const net = s.net_profit || 0;
+  const netEl = document.getElementById('kpi-net');
+  netEl.textContent = KES(net);
+  netEl.style.color = net >= 0 ? C.green : C.red;
+  document.getElementById('kpi-net-accent').style.background = net >= 0 ? C.green : C.red;
+
+  const revSub = document.getElementById('kpi-rev-sub');
+  if (activeYear === 'all' && s.annual_revenue) {
+    revSub.innerHTML = Object.entries(s.annual_revenue)
+      .map(([yr, rev]) => `<span style="display:inline-block;background:#f5f0f4;color:#875a7b;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;margin-right:3px;">${yr}: ${KES(rev)}</span>`)
+      .join('');
+  } else {
+    revSub.textContent = `${activeYear} only`;
+  }
+  if (s.best_month) {
+    document.getElementById('kpi-best').textContent     = s.best_month.name || '—';
+    document.getElementById('kpi-best-rev').textContent = KES(s.best_month.revenue || 0);
+  }
+
+  const rev = s.total_revenue || 0, cogs = s.total_cogs || 0, opex = s.total_opex || 0;
+  const gross = rev - cogs;
+
+  revDonutInst = destroyChart(revDonutInst);
+  document.getElementById('rev-donut-total').textContent = KES(rev);
+  revDonutInst = buildDonut('revDonutChart', ['COGS','Gross Profit'], [Math.max(cogs,0), Math.max(gross,0)], [C.orange, C.teal]);
+  buildDonutLegend('rev-donut-legend', ['COGS','Gross Profit'], [Math.max(cogs,0), Math.max(gross,0)], [C.orange, C.teal]);
+
+  grossDonutInst = destroyChart(grossDonutInst);
+  document.getElementById('gross-donut-total').textContent = KES(gross);
+  if (gross > 0) {
+    const labels = net >= 0 ? ['OpEx','Net Profit'] : ['OpEx','Net Loss'];
+    const vals   = net >= 0 ? [Math.max(opex,0), net] : [Math.max(opex,0) + Math.abs(net), 0.01];
+    const colors = net >= 0 ? [C.purple, C.green] : [C.red, '#eee'];
+    grossDonutInst = buildDonut('grossDonutChart', labels, vals, colors);
+    buildDonutLegend('gross-donut-legend', labels, [Math.max(opex,0), Math.abs(net)], colors);
+  } else {
+    document.getElementById('gross-donut-legend').innerHTML = '<div style="color:#dc2626;font-size:12px;">Revenue below COGS</div>';
+  }
+
+  netDonutInst = destroyChart(netDonutInst);
+  const profitMonths = (_pnlData).filter(r => (r.net_profit||0) > 0).sort((a,b) => b.net_profit - a.net_profit).slice(0, 6);
+  document.getElementById('net-donut-total').textContent = KES(net);
+  document.getElementById('net-donut-total').style.color = net >= 0 ? C.green : C.red;
+  if (profitMonths.length) {
+    netDonutInst = buildDonut('netDonutChart', profitMonths.map(r=>r.month), profitMonths.map(r=>r.net_profit), PAL);
+    buildDonutLegend('net-donut-legend', profitMonths.map(r=>r.month), profitMonths.map(r=>r.net_profit), PAL);
+  } else {
+    document.getElementById('net-donut-legend').innerHTML = '<div style="color:#9ca3af;font-size:12px;">No profitable months</div>';
+  }
+
+  pnlBarInst = destroyChart(pnlBarInst);
+  if (_pnlData.length) {
+    pnlBarInst = new Chart(document.getElementById('pnlChart').getContext('2d'), {
+      data: {
+        labels: _pnlData.map(r => r.month),
+        datasets: [
+          { type:'bar',  label:'Revenue',    data:_pnlData.map(r=>r.revenue||0),    backgroundColor: C.teal  +'BB' },
+          { type:'bar',  label:'COGS',       data:_pnlData.map(r=>r.cogs||0),       backgroundColor: C.orange+'BB' },
+          { type:'bar',  label:'OpEx',       data:_pnlData.map(r=>r.opex||0),       backgroundColor: C.purple+'BB' },
+          { type:'line', label:'Net Profit', data:_pnlData.map(r=>r.net_profit||0),
+            borderColor: C.green, backgroundColor:'transparent', borderWidth:2,
+            pointRadius:4, pointBackgroundColor: _pnlData.map(r=>(r.net_profit||0)>=0?C.green:C.red) }
+        ]
+      },
+      options: {
+        responsive:true,
+        plugins:{ legend:{ position:'bottom', labels:{boxWidth:12,font:{size:11}} } },
+        scales:{ y:{ ticks:{ callback:v=>'KES '+(v/1000).toFixed(0)+'k' } } }
+      }
+    });
+  }
+  if (_pnlView === 'donut') renderPnlDonut();
+
+  expDonutInst = destroyChart(expDonutInst);
+  document.getElementById('exp-legend').innerHTML = '';
+  if (expCats && expCats.length) {
+    const totalOpex = expCats.reduce((s, r) => s + r.amount, 0);
+    document.getElementById('donut-total').textContent = KES(totalOpex);
+    expDonutInst = buildDonut('expDonutChart', expCats.map(r=>r.category), expCats.map(r=>r.amount), PAL, { cutout:'68%' });
+    buildDonutLegend('exp-legend', expCats.map(r=>r.category), expCats.map(r=>r.amount), PAL);
+  } else {
+    document.getElementById('donut-total').textContent = '—';
+    document.getElementById('exp-legend').innerHTML = '<div style="color:#9ca3af;font-size:12px;">No expense data</div>';
+  }
+
+  const tbody = document.getElementById('pnl-tbody');
+  if (!_pnlData.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:20px;">No data for this period</td></tr>';
+  } else {
+    let totRev=0,totCogs=0,totOpex=0,totNet=0;
+    tbody.innerHTML = _pnlData.map(r => {
+      const gross  = (r.revenue||0) - (r.cogs||0);
+      const net    = r.net_profit || 0;
+      const margin = r.revenue > 0 ? Math.round(net / r.revenue * 100) : 0;
+      totRev+=r.revenue||0; totCogs+=r.cogs||0; totOpex+=r.opex||0; totNet+=net;
+      return `<tr>
+        <td style="font-weight:500;">${r.month}</td>
+        <td class="tr" style="color:${C.teal};font-weight:600;">${KES(r.revenue||0)}</td>
+        <td class="tr" style="color:${C.orange};">${KES(r.cogs||0)}</td>
+        <td class="tr" style="color:#6b7280;">${KES(gross)}</td>
+        <td class="tr" style="color:${C.purple};">${KES(r.opex||0)}</td>
+        <td class="tr" style="color:${net>=0?C.green:C.red};font-weight:700;">${KES(net)}</td>
+        <td class="tr"><span style="font-size:11px;font-weight:600;color:${margin>=0?C.green:C.red};">${margin}%</span></td>
+      </tr>`;
+    }).join('');
+    const totGross = totRev - totCogs;
+    const totMargin = totRev > 0 ? Math.round(totNet/totRev*100) : 0;
+    tbody.innerHTML += `<tr class="totals-row">
+      <td>TOTAL</td>
+      <td class="tr">${KES(totRev)}</td>
+      <td class="tr">${KES(totCogs)}</td>
+      <td class="tr">${KES(totGross)}</td>
+      <td class="tr">${KES(totOpex)}</td>
+      <td class="tr" style="color:${totNet>=0?C.green:C.red}">${KES(totNet)}</td>
+      <td class="tr"><span style="font-size:11px;font-weight:700;color:${totMargin>=0?C.green:C.red};">${totMargin}%</span></td>
+    </tr>`;
+  }
+}
+
+async function loadProducts() {
+  window._productsLoaded = true;
+  const [top, stock] = await Promise.all([
+    fetch('/api/top-products-analytics' + yearParam()).then(r => r.json()).catch(() => []),
+    fetch('/api/stock-analytics').then(r => r.json()).catch(() => []),
+  ]);
+  _topData = top || [];
+
+  topProdBarInst = destroyChart(topProdBarInst);
+  if (_topData.length) {
+    topProdBarInst = new Chart(document.getElementById('topProdChart').getContext('2d'), {
+      type:'bar',
+      data:{
+        labels: _topData.map(r => r.name && r.name.length>24 ? r.name.substring(0,24)+'…' : (r.name||'—')),
+        datasets:[{ label:'Revenue', data: _topData.map(r=>r.revenue||0), backgroundColor: PAL.slice(0,_topData.length) }]
+      },
+      options:{
+        indexAxis:'y', responsive:true,
+        plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => KES(c.parsed.x) } } },
+        scales:{ x:{ ticks:{ callback:v=>(v/1000).toFixed(0)+'k' } } }
+      }
+    });
+  }
+  if (_topView === 'donut') renderTopDonut();
+
+  stockDonutInst = destroyChart(stockDonutInst);
+  const top10 = (stock || []).slice(0, 10);
+  if (top10.length) {
+    const totalStockVal = (stock || []).reduce((s,r) => s + (r.value||0), 0);
+    document.getElementById('stock-total-label').textContent = KES(totalStockVal);
+    stockDonutInst = buildDonut('stockDonutChart', top10.map(r=>r.name||'—'), top10.map(r=>r.value||0), PAL, { cutout:'65%' });
+    buildDonutLegend('stock-donut-legend', top10.map(r=>r.name||'—'), top10.map(r=>r.value||0), PAL);
+  }
+
+  const container = document.getElementById('stock-grid-container');
+  const pillsEl   = document.getElementById('stock-summary-pills');
+  if (!stock || !stock.length) {
+    container.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:20px;">No stock data</p>';
+    return;
+  }
+  const totalVal = stock.reduce((s,r) => s + (r.value||0), 0);
+  const totalQty = stock.reduce((s,r) => s + (r.qty_on_hand||0), 0);
+  document.getElementById('stock-count-title').textContent = `Current Stock (${stock.length} SKUs)`;
+  pillsEl.innerHTML = [
+    `<span style="background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;">Total value: ${KES(totalVal)}</span>`,
+    `<span style="background:#dbeafe;color:#1e40af;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;">Total units: ${Math.round(totalQty).toLocaleString()}</span>`,
+  ].join('');
+  container.innerHTML = `<div class="stock-grid">${stock.map(r => {
+    const margin   = r.list_price > 0 ? Math.round((r.list_price - r.cost) / r.list_price * 100) : 0;
+    const lowStock = r.qty_on_hand < 10;
+    return `<div class="stock-item" style="${lowStock?'border-color:#fecaca;':''}">
+      <div class="stock-name">${r.name||'—'}</div>
+      <div class="stock-qty">Qty: <strong style="color:${lowStock?'#dc2626':'#374151'};">${Number(r.qty_on_hand||0).toLocaleString()}</strong> · Cost: ${KES(r.cost||0)}</div>
+      <div class="stock-val">${KES(r.value||0)}</div>
+      ${margin > 0 ? `<div class="stock-margin">↑ ${margin}% margin</div>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function refreshSplitLabels() {
+  try {
+    const s = await fetch('/api/profile/get-split').then(r => r.json());
+    document.getElementById('dir-tab-label').textContent      = `${s.shop}/${s.kemboi}/${s.mutai}%`;
+    document.getElementById('dir-rule-shop').textContent      = s.shop;
+    document.getElementById('dir-rule-kemboi').textContent    = s.kemboi;
+    document.getElementById('dir-rule-mutai').textContent     = s.mutai;
+    document.getElementById('dir-card-shop-pct').textContent  = `${s.shop}% stays in business`;
+    document.getElementById('dir-card-kemboi-pct').textContent= `50% ownership · ${s.kemboi}% profits`;
+    document.getElementById('dir-card-mutai-pct').textContent = `50% ownership · ${s.mutai}% profits`;
+    document.getElementById('dir-th-shop').textContent        = `Shop (${s.shop}%)`;
+    document.getElementById('dir-th-kemboi').textContent      = `Kemboi (${s.kemboi}%)`;
+    document.getElementById('dir-th-mutai').textContent       = `Mutai (${s.mutai}%)`;
+  } catch(e) {}
+}
+
+async function loadDirectors() {
+  window._directorsLoaded = true;
+  await refreshSplitLabels();
+  const data = await fetch('/api/directors-analytics' + yearParam()).then(r => r.json()).catch(() => null);
+  if (!data || !data.rows) return;
+  _dirData = data;
+  const { rows, totals } = data;
+
+  const profitMonthCount = rows.filter(r => r.profitable).length;
+  const lossMonthCount   = rows.filter(r => !r.profitable).length;
+
+  ['shop','kemboi','mutai'].forEach(key => {
+    document.getElementById('dir-' + key).textContent = KES(totals[key] || 0);
+    const avg = profitMonthCount > 0 ? (totals[key]||0) / profitMonthCount : 0;
+    document.getElementById('dir-' + key + '-avg').textContent = profitMonthCount ? KES(avg) : '—';
+    document.getElementById('dir-' + key + '-months').textContent =
+      `${profitMonthCount} profitable month${profitMonthCount!==1?'s':''} · ${lossMonthCount} loss month${lossMonthCount!==1?'s':''}`;
+  });
+
+  let cs=0,ck=0,cm=0;
+  const cum = rows.map(r => { cs+=r.shop||0; ck+=r.kemboi||0; cm+=r.mutai||0; return {s:cs,k:ck,m:cm}; });
+  dirCumInst = destroyChart(dirCumInst);
+  dirCumInst = new Chart(document.getElementById('dirCumChart').getContext('2d'), {
+    type:'line',
+    data:{
+      labels: rows.map(r => r.month),
+      datasets:[
+        { label:'Shop',   data:cum.map(r=>r.s), borderColor:C.purple, backgroundColor:C.purple+'22', fill:true, tension:0.3, borderWidth:2 },
+        { label:'Kemboi', data:cum.map(r=>r.k), borderColor:C.teal,   backgroundColor:C.teal  +'22', fill:true, tension:0.3, borderWidth:2 },
+        { label:'Mutai',  data:cum.map(r=>r.m), borderColor:C.orange, backgroundColor:C.orange+'22', fill:true, tension:0.3, borderWidth:2 },
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ position:'bottom', labels:{boxWidth:12,font:{size:11}} } },
+      scales:{ y:{ ticks:{ callback:v=>'KES '+(v/1000).toFixed(0)+'k' } } }
+    }
+  });
+
+  dirMonBarInst = destroyChart(dirMonBarInst);
+  if (rows.filter(r => r.profitable).length) {
+    dirMonBarInst = new Chart(document.getElementById('dirMonBarChart').getContext('2d'), {
+      type:'bar',
+      data:{
+        labels: rows.map(r => r.month),
+        datasets:[
+          { label:'Shop',   data:rows.map(r=>r.profitable?r.shop  :0), backgroundColor:C.purple+'BB' },
+          { label:'Kemboi', data:rows.map(r=>r.profitable?r.kemboi:0), backgroundColor:C.teal  +'BB' },
+          { label:'Mutai',  data:rows.map(r=>r.profitable?r.mutai :0), backgroundColor:C.orange+'BB' },
+        ]
+      },
+      options:{
+        responsive:true,
+        plugins:{ legend:{ position:'bottom', labels:{boxWidth:12,font:{size:11}} } },
+        scales:{ y:{ ticks:{ callback:v=>'KES '+(v/1000).toFixed(0)+'k' } } }
+      }
+    });
+  }
+
+  if (_dirCumView === 'donut') renderDirSplitDonut();
+  if (_dirMonView === 'donut') renderDirMonDonut();
+
+  const tbody = document.getElementById('dir-tbody');
+  tbody.innerHTML = rows.map(r => {
+    const badge = r.profitable ? '<span class="badge-profit">Profit</span>' : '<span class="badge-loss">Loss</span>';
+    return `<tr>
+      <td style="font-weight:500;">${r.month}</td>
+      <td class="tr" style="color:${C.teal};">${r.revenue !== undefined ? KES(r.revenue) : '—'}</td>
+      <td class="tr" style="color:${r.net_profit>=0?C.green:C.red};font-weight:600;">${KES(r.net_profit)}</td>
+      <td class="tr">${badge}</td>
+      <td class="tr" style="color:${C.purple};">${r.profitable ? KES(r.shop)   : '<span style="color:#d1d5db;">—</span>'}</td>
+      <td class="tr" style="color:${C.teal};">${r.profitable   ? KES(r.kemboi) : '<span style="color:#d1d5db;">—</span>'}</td>
+      <td class="tr" style="color:${C.orange};">${r.profitable ? KES(r.mutai)  : '<span style="color:#d1d5db;">—</span>'}</td>
+    </tr>`;
+  }).join('') + `<tr class="totals-row">
+    <td>TOTAL</td><td class="tr">—</td>
+    <td class="tr" style="color:${totals.net_profit>=0?C.green:C.red};">${KES(totals.net_profit||0)}</td>
+    <td></td>
+    <td class="tr" style="color:${C.purple};">${KES(totals.shop||0)}</td>
+    <td class="tr" style="color:${C.teal};">${KES(totals.kemboi||0)}</td>
+    <td class="tr" style="color:${C.orange};">${KES(totals.mutai||0)}</td>
+  </tr>`;
+}
+
+loadOverview();
+</script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Dead / Stale Stock{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:18px;">
+  <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Dead / Stale Stock</h1>
+  <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Products with stock on hand but no recent sales — capital tied up and at risk</p>
+</div>
+
+{% include '_filter.html' %}
+
+<!-- Summary -->
+{% if rows %}
+{% set total_value = rows | sum(attribute='stock_value', start=0) %}
+<div style="background:#fff8e6;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#92400e;">
+  <strong>{{ rows|length }} products</strong> with stale/dead stock — total tied-up value:
+  <strong>KSH {{ '{:,.0f}'.format(total_value|float) }}</strong>
+</div>
+{% endif %}
+
+<div class="card" style="overflow:hidden;">
+  {% if rows %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th class="r">Qty on Hand</th>
+        <th class="r">Stock Value (Cost)</th>
+        <th class="r">Last Sale</th>
+        <th class="r">Days Idle</th>
+        <th class="c">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+        <td class="r">{{ '{:,.0f}'.format(r.qty_on_hand|float) }}</td>
+        <td class="r" style="color:#dc2626;font-weight:600;">KSH {{ '{:,.0f}'.format(r.stock_value|float) }}</td>
+        <td class="r" style="color:#6b7280;">{{ r.last_sale_date or 'Never' }}</td>
+        <td class="r" style="font-weight:600;
+          color:{% if r.days_since_sale is none or r.days_since_sale > 90 %}#dc2626{% elif r.days_since_sale > 60 %}#d97706{% else %}#6b7280{% endif %};">
+          {{ r.days_since_sale or '∞' }}
+        </td>
+        <td class="c">
+          {% if r.status == 'NEVER SOLD' %}<span class="badge-critical">Never Sold</span>
+          {% elif r.status == 'DEAD (90+ days)' %}<span class="badge-critical">Dead Stock</span>
+          {% elif r.status == 'STALE (60+ days)' %}<span style="background:#fed7aa;color:#9a3412;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">Stale</span>
+          {% else %}<span class="badge-warn">Slow</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">No dead or stale stock found — inventory is moving well.</div>
+  {% endif %}
+</div>
+{% endblock %}

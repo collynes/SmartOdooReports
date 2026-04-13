@@ -1,0 +1,426 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:18px;">
+  <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Dashboard</h1>
+  <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Live sales overview</p>
+</div>
+
+<!-- Smart Insight Card -->
+{% if insight %}
+  {% if insight.type == 'positive' %}
+    {% set i_bg='#faf5fa' %}{% set i_border='#875a7b' %}{% set i_icon='#875a7b' %}{% set i_icon_bg='#f5f0f4' %}
+  {% elif insight.type == 'warning' %}
+    {% set i_bg='#fffbeb' %}{% set i_border='#d97706' %}{% set i_icon='#d97706' %}{% set i_icon_bg='#fef3c7' %}
+  {% elif insight.type == 'alert' %}
+    {% set i_bg='#fff5f5' %}{% set i_border='#dc2626' %}{% set i_icon='#dc2626' %}{% set i_icon_bg='#fee2e2' %}
+  {% else %}
+    {% set i_bg='#eff6ff' %}{% set i_border='#2563eb' %}{% set i_icon='#2563eb' %}{% set i_icon_bg='#dbeafe' %}
+  {% endif %}
+<div style="background:{{ i_bg }};border:1px solid {{ i_border }};border-left:4px solid {{ i_border }};border-radius:8px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:12px;">
+  <div style="background:{{ i_icon_bg }};width:36px;height:36px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+    {% if insight.icon == 'star' %}
+      <svg width="16" height="16" fill="{{ i_icon }}" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    {% elif insight.icon == 'trend-up' %}
+      <svg width="16" height="16" fill="none" stroke="{{ i_icon }}" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+    {% elif insight.icon == 'trend-down' %}
+      <svg width="16" height="16" fill="none" stroke="{{ i_icon }}" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+    {% elif insight.icon == 'alert' %}
+      <svg width="16" height="16" fill="none" stroke="{{ i_icon }}" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    {% elif insight.icon == 'user' %}
+      <svg width="16" height="16" fill="none" stroke="{{ i_icon }}" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    {% elif insight.icon == 'calendar' %}
+      <svg width="16" height="16" fill="none" stroke="{{ i_icon }}" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    {% else %}
+      <svg width="16" height="16" fill="none" stroke="{{ i_icon }}" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    {% endif %}
+  </div>
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:14px;font-weight:600;color:#1f2937;line-height:1.4;">{{ insight.text }}</div>
+    <div style="font-size:12.5px;color:#6b7280;margin-top:3px;">{{ insight.subtext }}</div>
+  </div>
+  <a href="/anomalies" style="font-size:11.5px;color:{{ i_icon }};font-weight:600;text-decoration:none;white-space:nowrap;padding:4px 10px;border:1px solid {{ i_icon }};border-radius:5px;flex-shrink:0;">View Details</a>
+</div>
+{% endif %}
+
+{% include '_filter.html' %}
+
+{% set rev_change = ((kpi.revenue|float - prev.revenue|float) / prev.revenue|float * 100)|round(1) if prev.revenue|float > 0 else 0 %}
+{% set ord_change = ((kpi.orders|int - prev.orders|int) / prev.orders|int * 100)|round(1) if prev.orders|int > 0 else 0 %}
+{% set aov_change = ((kpi.avg_order|float - prev_avg|float) / prev_avg|float * 100)|round(1) if prev_avg|float > 0 else 0 %}
+
+<style>
+  .kpi-grad { border-radius:14px;padding:22px 22px 18px;color:#fff;position:relative;overflow:hidden;cursor:default;transition:transform .18s,box-shadow .18s; }
+  .kpi-grad:hover { transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.22); }
+  .kpi-lbl { font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;opacity:.68;margin-bottom:4px; }
+  .kpi-val { font-size:30px;font-weight:800;letter-spacing:-.5px;line-height:1;margin-bottom:10px; }
+  .kpi-badge { display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;font-size:12px;font-weight:700;background:rgba(255,255,255,.18); }
+  .kpi-sub { display:inline;opacity:.6;font-size:11px;margin-left:8px; }
+  .kpi-icon-bg { position:absolute;right:14px;top:50%;transform:translateY(-50%);opacity:.14; }
+</style>
+
+<!-- KPI Cards — gradient redesign -->
+<div class="kpi-grid kpi-grid-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+
+  <!-- Revenue -->
+  <div class="kpi-grad" style="background:linear-gradient(135deg,#875a7b 0%,#5c3d53 100%);">
+    <div class="kpi-icon-bg"><svg width="64" height="64" fill="none" stroke="white" stroke-width="1.2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div class="kpi-lbl">Revenue</div>
+    <div class="kpi-val" data-count-up="{{ kpi.revenue|float|round|int }}" data-prefix="KES ">KES 0</div>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+      <span class="kpi-badge">{% if rev_change >= 0 %}↑ +{{ rev_change }}%{% else %}↓ {{ rev_change }}%{% endif %}</span>
+      {% if prev.revenue|float > 0 %}<span class="kpi-sub">vs KES {{ '{:,.0f}'.format(prev.revenue|float) }}</span>{% endif %}
+    </div>
+  </div>
+
+  <!-- Orders -->
+  <div class="kpi-grad" style="background:linear-gradient(135deg,#017E84 0%,#015060 100%);">
+    <div class="kpi-icon-bg"><svg width="64" height="64" fill="none" stroke="white" stroke-width="1.2" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+    <div class="kpi-lbl">Orders</div>
+    <div class="kpi-val" data-count-up="{{ kpi.orders|int }}">0</div>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+      <span class="kpi-badge">{% if ord_change >= 0 %}↑ +{{ ord_change }}%{% else %}↓ {{ ord_change }}%{% endif %}</span>
+      {% if prev.orders|int > 0 %}<span class="kpi-sub">vs {{ prev.orders }} orders</span>{% endif %}
+    </div>
+  </div>
+
+  <!-- Avg Order Value -->
+  <div class="kpi-grad" style="background:linear-gradient(135deg,#d97706 0%,#b45309 100%);">
+    <div class="kpi-icon-bg"><svg width="64" height="64" fill="none" stroke="white" stroke-width="1.2" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+    <div class="kpi-lbl">Avg Order Value</div>
+    <div class="kpi-val" data-count-up="{{ kpi.avg_order|float|round|int }}" data-prefix="KES ">KES 0</div>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+      <span class="kpi-badge">{% if aov_change >= 0 %}↑ +{{ aov_change }}%{% else %}↓ {{ aov_change }}%{% endif %}</span>
+      {% if prev_avg|float > 0 %}<span class="kpi-sub">vs KES {{ '{:,.0f}'.format(prev_avg|float) }}</span>{% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Monthly Revenue Target — upgraded -->
+{% if monthly_target > 0 %}
+{% set target_pct = [((mtd_revenue / monthly_target) * 100)|round(1), 100]|min %}
+{% set bar_grad = 'linear-gradient(90deg,#875a7b,#c095b8)' if target_pct < 50 else ('linear-gradient(90deg,#d97706,#f59e0b)' if target_pct < 80 else 'linear-gradient(90deg,#16a34a,#22c55e)') %}
+{% set pct_color = '#16a34a' if target_pct >= 80 else ('#d97706' if target_pct >= 50 else '#875a7b') %}
+<div style="background:linear-gradient(135deg,#faf5fa,#f0e8f0);border:1px solid #e5d5e5;border-radius:14px;padding:16px 22px;margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+  <div style="flex-shrink:0;">
+    <div style="font-size:10px;font-weight:700;color:#875a7b;text-transform:uppercase;letter-spacing:.09em;margin-bottom:3px;">{{ month_label }} Target</div>
+    <div style="font-size:22px;font-weight:800;color:#3d2645;line-height:1;">KES {{ '{:,.0f}'.format(mtd_revenue) }}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:2px;">of KES {{ '{:,.0f}'.format(monthly_target) }} goal</div>
+  </div>
+  <div style="flex:1;min-width:180px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:11px;color:#9ca3af;">Progress this month</span>
+      <span style="font-size:16px;font-weight:800;color:{{ pct_color }};">{{ target_pct }}%</span>
+    </div>
+    <div style="background:#e5d5e5;border-radius:8px;height:12px;overflow:hidden;">
+      <div style="height:12px;border-radius:8px;background:{{ bar_grad }};width:{{ target_pct }}%;transition:width .6s ease;box-shadow:0 2px 4px rgba(0,0,0,.15);"></div>
+    </div>
+    {% if target_pct < 100 %}
+    <div style="font-size:11px;color:#9ca3af;margin-top:4px;">KES {{ '{:,.0f}'.format(monthly_target - mtd_revenue) }} remaining</div>
+    {% else %}
+    <div style="font-size:11px;color:#16a34a;font-weight:600;margin-top:4px;">🎉 Target achieved!</div>
+    {% endif %}
+  </div>
+  <a href="/profile#operations" style="font-size:11.5px;color:#875a7b;font-weight:600;text-decoration:none;flex-shrink:0;white-space:nowrap;">Edit →</a>
+</div>
+{% endif %}
+
+<!-- Revenue + Top Products row -->
+<div class="dash-chart-row" style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px;">
+  <div class="card" style="padding:18px 20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;">Revenue — {{ filter_label }}</div>
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-rev-line" onclick="setRevView('line')">Line</button>
+        <button class="view-btn" id="btn-rev-bar" onclick="setRevView('bar')">Bar</button>
+      </div>
+    </div>
+    <canvas id="revenueChart" height="100"></canvas>
+  </div>
+  <div class="card" style="padding:18px 20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;">Top Products</div>
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-tp-bars" onclick="setTPView('bars')">Bars</button>
+        <button class="view-btn" id="btn-tp-pie" onclick="setTPView('pie')">Pie</button>
+      </div>
+    </div>
+    <!-- Progress bars view -->
+    <div id="tp-bars-view">
+    {% if top5 %}
+    {% set max_rev = top5[0].revenue|float %}
+    {% for r in top5 %}
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+        <span style="font-size:12.5px;color:#374151;font-weight:500;">{{ r.product[:26] }}{% if r.product|length > 26 %}…{% endif %}</span>
+        <span style="font-size:12px;color:#875a7b;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</span>
+      </div>
+      <div style="background:#f3f4f6;border-radius:3px;height:4px;">
+        <div style="background:#875a7b;border-radius:3px;height:4px;width:{{ ((r.revenue|float / max_rev) * 100)|round }}%;transition:width .4s;"></div>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="color:#9ca3af;font-size:13px;">No sales data for this period.</p>
+    {% endif %}
+    </div>
+    <!-- Donut chart view -->
+    <div id="tp-pie-view" style="display:none;">
+      <canvas id="topPieChart" height="180"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- AI Explain button for dashboard -->
+<div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+  {% set explain_page = 'dashboard' %}{% include '_explain.html' %}
+</div>
+
+<!-- Revenue Trend (incorporated) -->
+<div class="card" style="padding:18px 20px;margin-bottom:14px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div>
+      <div style="font-size:13px;font-weight:600;color:#374151;">Daily Revenue & Orders — {{ filter_label }}</div>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-trend-rev" onclick="setTrendView('rev')">Revenue</button>
+        <button class="view-btn" id="btn-trend-ord" onclick="setTrendView('ord')">Orders</button>
+        <button class="view-btn" id="btn-trend-both" onclick="setTrendView('both')">Both</button>
+      </div>
+    </div>
+  </div>
+  <div id="trend-rev-wrap"><canvas id="trendRevChart" height="70"></canvas></div>
+  <div id="trend-ord-wrap" style="display:none;"><canvas id="trendOrdChart" height="70"></canvas></div>
+  <div id="trend-both-wrap" style="display:none;">
+    <canvas id="trendBothRevChart" height="55" style="margin-bottom:10px;"></canvas>
+    <canvas id="trendBothOrdChart" height="45"></canvas>
+  </div>
+</div>
+
+<!-- Revenue Activity Heatmap -->
+<div class="card" style="padding:18px 20px;margin-bottom:14px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div style="font-size:13px;font-weight:600;color:#374151;">Revenue Activity — Last 12 Weeks</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Each square = one day · hover for details</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#9ca3af;">
+      <span>Less</span>
+      <div style="width:10px;height:10px;border-radius:2px;background:#f0e8f0;"></div>
+      <div style="width:10px;height:10px;border-radius:2px;background:#d4adce;"></div>
+      <div style="width:10px;height:10px;border-radius:2px;background:#b07aab;"></div>
+      <div style="width:10px;height:10px;border-radius:2px;background:#875a7b;"></div>
+      <div style="width:10px;height:10px;border-radius:2px;background:#5c3d53;"></div>
+      <span>More</span>
+    </div>
+  </div>
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <div id="heatmap-wrap" style="display:inline-flex;gap:3px;padding-bottom:4px;"></div>
+  </div>
+  <div id="heatmap-tip" style="font-size:11.5px;color:#875a7b;font-weight:600;margin-top:8px;min-height:16px;text-align:center;"></div>
+</div>
+
+<script>
+const PALETTE = ['#875a7b','#a56a9b','#714b67','#c095b8','#5c3d53','#d9bfd3','#3d2645','#ede0ea'];
+let revChart = null;
+let tpPieBuilt = false;
+
+fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "custom" %}&from={{ filter_from }}&to={{ filter_to }}{% endif %}')
+  .then(r => r.json())
+  .then(data => {
+    const labels = data.map(d => fmtDate(d.day));
+    const values = data.map(d => d.total);
+    const ptR = data.length > 60 ? 0 : 3;
+    const ctx = document.getElementById('revenueChart').getContext('2d');
+    revChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          borderColor: '#875a7b', backgroundColor: 'rgba(135,90,123,.08)',
+          fill: true, tension: 0.35, pointRadius: ptR,
+          pointBackgroundColor: '#875a7b', borderWidth: 2,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        plugins: { legend:{display:false}, tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
+        scales: {
+          x:{type:'category',ticks:{color:'#9ca3af',font:{size:11},maxTicksLimit:10},grid:{color:'#f3f4f6'}},
+          y:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}
+        }
+      }
+    });
+    window._revLabels = labels;
+    window._revValues = values;
+    window._revPtR = ptR;
+  });
+
+function setRevView(mode) {
+  document.getElementById('btn-rev-line').classList.toggle('active', mode==='line');
+  document.getElementById('btn-rev-bar').classList.toggle('active', mode==='bar');
+  if (!revChart) return;
+  revChart.config.type = mode;
+  if (mode === 'bar') {
+    revChart.data.datasets[0].backgroundColor = 'rgba(135,90,123,.7)';
+    revChart.data.datasets[0].fill = false;
+    revChart.data.datasets[0].borderRadius = 4;
+  } else {
+    revChart.data.datasets[0].backgroundColor = 'rgba(135,90,123,.08)';
+    revChart.data.datasets[0].fill = true;
+  }
+  revChart.update();
+}
+
+const top5Data = {{ top5 | tojson }};
+let trendRevChart = null, trendOrdChart = null, trendBothRevChart = null, trendBothOrdChart = null;
+let trendData = [];
+
+// Load trend data (reuse same API)
+fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "custom" %}&from={{ filter_from }}&to={{ filter_to }}{% endif %}')
+  .then(r => r.json())
+  .then(data => {
+    trendData = data;
+    const labels = data.map(d => fmtDate(d.day));
+    const revs   = data.map(d => d.total);
+    const ords   = data.map(d => d.orders);
+    const ptR    = data.length > 60 ? 0 : 3;
+
+    trendRevChart = new Chart(document.getElementById('trendRevChart').getContext('2d'), {
+      type:'bar', data:{labels,datasets:[{label:'Revenue',data:revs,backgroundColor:'rgba(135,90,123,.65)',borderRadius:3}]},
+      options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
+        scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:10},maxTicksLimit:12},grid:{display:false}},
+                y:{ticks:{color:'#9ca3af',font:{size:10},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}
+    });
+    trendOrdChart = new Chart(document.getElementById('trendOrdChart').getContext('2d'), {
+      type:'line', data:{labels,datasets:[{label:'Orders',data:ords,borderColor:'#714b67',backgroundColor:'rgba(113,75,103,.07)',fill:true,tension:0.35,pointRadius:ptR,borderWidth:2}]},
+      options:{plugins:{legend:{display:false}},
+        scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:10},maxTicksLimit:12},grid:{display:false}},
+                y:{ticks:{color:'#9ca3af',font:{size:10},stepSize:1},grid:{color:'#f3f4f6'}}}}
+    });
+    trendBothRevChart = new Chart(document.getElementById('trendBothRevChart').getContext('2d'), {
+      type:'bar', data:{labels,datasets:[{data:revs,backgroundColor:'rgba(135,90,123,.65)',borderRadius:3}]},
+      options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
+        scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:9},maxTicksLimit:12},grid:{display:false}},
+                y:{ticks:{color:'#9ca3af',font:{size:9},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}
+    });
+    trendBothOrdChart = new Chart(document.getElementById('trendBothOrdChart').getContext('2d'), {
+      type:'line', data:{labels,datasets:[{data:ords,borderColor:'#714b67',backgroundColor:'rgba(113,75,103,.07)',fill:true,tension:0.35,pointRadius:ptR,borderWidth:2}]},
+      options:{plugins:{legend:{display:false}},
+        scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:9},maxTicksLimit:12},grid:{display:false}},
+                y:{ticks:{color:'#9ca3af',font:{size:9},stepSize:1},grid:{color:'#f3f4f6'}}}}
+    });
+  });
+
+function setTrendView(mode) {
+  ['rev','ord','both'].forEach(m => {
+    document.getElementById('trend-'+m+'-wrap').style.display = m===mode ? '' : 'none';
+    document.getElementById('btn-trend-'+m).classList.toggle('active', m===mode);
+  });
+}
+
+function setTPView(mode) {
+  document.getElementById('btn-tp-bars').classList.toggle('active', mode==='bars');
+  document.getElementById('btn-tp-pie').classList.toggle('active', mode==='pie');
+  document.getElementById('tp-bars-view').style.display = mode==='bars' ? '' : 'none';
+  document.getElementById('tp-pie-view').style.display = mode==='pie' ? '' : 'none';
+  if (mode==='pie' && !tpPieBuilt && top5Data.length) {
+    tpPieBuilt = true;
+    new Chart(document.getElementById('topPieChart').getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: top5Data.map(r => r.product.length>18 ? r.product.slice(0,18)+'…':r.product),
+        datasets:[{data:top5Data.map(r=>parseFloat(r.revenue)),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]
+      },
+      options: {
+        cutout:'58%',
+        plugins:{
+          legend:{position:'bottom',labels:{font:{size:10},padding:6,color:'#6b7280'}},
+          tooltip:{callbacks:{label:c=>'KSH '+c.parsed.toLocaleString()}}
+        }
+      }
+    });
+  }
+}
+
+// ── Revenue heatmap ─────────────────────────────────────────────
+(function buildHeatmap() {
+  var today = new Date();
+  var end   = new Date(today);
+  var start = new Date(today);
+  start.setDate(today.getDate() - 83);
+  var fmt = function(d) { return d.toISOString().split('T')[0]; };
+
+  fetch('/api/revenue-trend?period=custom&from=' + fmt(start) + '&to=' + fmt(end))
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      var map = {}, maxVal = 0;
+      data.forEach(function(d) { map[d.day] = d.total; if (d.total > maxVal) maxVal = d.total; });
+
+      function heatColor(v) {
+        if (v <= 0) return '#f0e8f0';
+        var i = v / maxVal;
+        if (i < 0.15) return '#e8d5e8';
+        if (i < 0.3)  return '#d4adce';
+        if (i < 0.5)  return '#b07aab';
+        if (i < 0.7)  return '#9a6090';
+        if (i < 0.85) return '#875a7b';
+        return '#5c3d53';
+      }
+
+      // Find start of first week (Monday)
+      var cur = new Date(start);
+      var dow = cur.getDay();
+      cur.setDate(cur.getDate() - (dow === 0 ? 6 : dow - 1));
+
+      var dayLabels = ['M','T','W','T','F','S','S'];
+      var wrap = document.getElementById('heatmap-wrap');
+      var tip  = document.getElementById('heatmap-tip');
+      var html = '';
+
+      // Day-of-week label column
+      html += '<div style="display:flex;flex-direction:column;gap:3px;margin-right:4px;padding-top:18px;">';
+      dayLabels.forEach(function(d) {
+        html += '<div style="height:14px;line-height:14px;font-size:9px;color:#c4b5c2;font-weight:600;">' + d + '</div>';
+      });
+      html += '</div>';
+
+      // Weekly columns
+      while (cur <= end) {
+        html += '<div style="display:flex;flex-direction:column;gap:3px;">';
+        // Month label on first day of month
+        var monthLbl = (cur.getDate() === 1 || cur <= new Date(start))
+          ? cur.toLocaleString('en',{month:'short'}) : '&nbsp;';
+        html += '<div style="height:14px;line-height:14px;font-size:9px;color:#9ca3af;white-space:nowrap;">' + monthLbl + '</div>';
+        for (var d = 0; d < 7; d++) {
+          var ds  = fmt(cur);
+          var val = map[ds] || 0;
+          var future = cur > today;
+          var bg  = future ? '#f9fafb' : heatColor(val);
+          var tip_text = future ? '' : (ds + (val > 0 ? ': KES ' + val.toLocaleString('en-KE') : ': no sales'));
+          html += '<div class="hm-day" style="width:14px;height:14px;border-radius:3px;background:' + bg + ';' +
+            (future ? '' : 'cursor:pointer;') +
+            '" data-tip="' + tip_text + '"></div>';
+          cur.setDate(cur.getDate() + 1);
+        }
+        html += '</div>';
+      }
+
+      wrap.innerHTML = html;
+
+      // Hover tooltip
+      wrap.querySelectorAll('.hm-day[data-tip]').forEach(function(el) {
+        el.addEventListener('mouseenter', function() {
+          if (el.dataset.tip) tip.textContent = el.dataset.tip;
+        });
+        el.addEventListener('mouseleave', function() { tip.textContent = ''; });
+      });
+    })
+    .catch(function(){});
+})();
+</script>
+{% endblock %}

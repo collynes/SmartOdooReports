@@ -1,0 +1,380 @@
+{% extends 'base.html' %}
+{% block title %}Expenses{% endblock %}
+{% block content %}
+<style>
+  .exp-tab { padding:9px 20px;border:none;background:none;font-size:13px;font-weight:600;color:#9ca3af;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s; }
+  .exp-tab.active { color:#875a7b;border-bottom-color:#875a7b; }
+</style>
+
+<!-- Header -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Expenses</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Track, import and manage all business expenses — {{ filter_label }}</p>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <label style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;" for="xls-input">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Import XLS
+    </label>
+    <form method="POST" enctype="multipart/form-data" id="xls-form" style="display:none;">
+      <input type="hidden" name="action" value="import_xls">
+      <input type="file" id="xls-input" name="xls_file" accept=".xlsx,.xls,.csv" onchange="document.getElementById('xls-form').submit()">
+    </form>
+    <button onclick="document.getElementById('add-modal').style.display='flex'"
+      style="background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(135,90,123,.3);">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Expense
+    </button>
+  </div>
+</div>
+
+<!-- Summary KPI gradient cards -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px;">
+  {% set total_manual = manual | sum(attribute='amount', start=0) if manual else 0 %}
+  {% set total_odoo = odoo_bills | sum(attribute='amount', start=0) if odoo_bills else 0 %}
+  {% set total_all = total_manual + total_odoo %}
+  <div style="background:linear-gradient(135deg,#dc2626,#991b1b);border-radius:12px;padding:16px 18px;color:#fff;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Total Expenses</div>
+    <div style="font-size:22px;font-weight:800;line-height:1;">KSH {{ '{:,.0f}'.format(total_all|float) }}</div>
+    <div style="font-size:11px;opacity:.6;margin-top:3px;">{{ filter_label }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#875a7b,#5c3d53);border-radius:12px;padding:16px 18px;color:#fff;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Manual Entries</div>
+    <div style="font-size:22px;font-weight:800;line-height:1;" data-count-up="{{ manual|length if manual else 0 }}">{{ manual|length if manual else 0 }}</div>
+    <div style="font-size:11px;opacity:.6;margin-top:3px;">KSH {{ '{:,.0f}'.format(total_manual|float) }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#017E84,#015060);border-radius:12px;padding:16px 18px;color:#fff;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Odoo Bills</div>
+    <div style="font-size:22px;font-weight:800;line-height:1;" data-count-up="{{ odoo_bills|length if odoo_bills else 0 }}">{{ odoo_bills|length if odoo_bills else 0 }}</div>
+    <div style="font-size:11px;opacity:.6;margin-top:3px;">KSH {{ '{:,.0f}'.format(total_odoo|float) }}</div>
+  </div>
+  {% if smart_tiles %}
+  <div style="background:linear-gradient(135deg,#d97706,#b45309);border-radius:12px;padding:16px 18px;color:#fff;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Smart Alerts</div>
+    <div style="font-size:22px;font-weight:800;line-height:1;" data-count-up="{{ smart_tiles|length }}">{{ smart_tiles|length }}</div>
+    <div style="font-size:11px;opacity:.6;margin-top:3px;">Missing recurring expenses</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Smart Tiles -->
+{% if smart_tiles %}
+<div style="margin-bottom:22px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+    <svg width="14" height="14" fill="none" stroke="#d97706" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span style="font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em;">Smart Suggestions — Missing Recurring Expenses</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+    {% for tile in smart_tiles %}
+    <div style="background:#fff;border:1px solid #e5e7eb;border-top:3px solid {{ tile.color }};border-radius:10px;padding:16px 18px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:2px;">{{ tile.title }}</div>
+          <div style="font-size:12px;color:#6b7280;line-height:1.4;">{{ tile.subtitle }}</div>
+        </div>
+        <span style="background:{{ tile.color }};color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;flex-shrink:0;">{{ tile.priority }}</span>
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:14px;padding:10px 0;border-top:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6;">
+        <div>
+          <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Missing</div>
+          <div style="font-size:18px;font-weight:700;color:{{ tile.color }};">{{ tile.missing_count }}</div>
+          <div style="font-size:10px;color:#9ca3af;">{{ tile.frequency }} entries</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Per Entry</div>
+          <div style="font-size:16px;font-weight:700;color:#374151;">KSH {{ '{:,.0f}'.format(tile.amount) }}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Total Due</div>
+          <div style="font-size:16px;font-weight:700;color:#111827;">KSH {{ '{:,.0f}'.format(tile.total_amount) }}</div>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:#9ca3af;margin-bottom:4px;">Missing entries:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+          {% for d in tile.missing_dates[:6] %}
+          <span style="background:#f5f0f4;color:#875a7b;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:500;">{{ d }}</span>
+          {% endfor %}
+          {% if tile.missing_dates|length > 6 %}
+          <span style="background:#f3f4f6;color:#9ca3af;padding:2px 7px;border-radius:4px;font-size:11px;">+{{ tile.missing_dates|length - 6 }} more</span>
+          {% endif %}
+        </div>
+      </div>
+      <form method="POST">
+        <input type="hidden" name="action" value="bulk_add">
+        <input type="hidden" name="category"      value="{{ tile.category }}">
+        <input type="hidden" name="vendor"         value="{{ tile.vendor }}">
+        <input type="hidden" name="amount"         value="{{ tile.amount }}">
+        <input type="hidden" name="frequency"      value="{{ tile.frequency }}">
+        <input type="hidden" name="missing_dates"  value='{{ tile.missing_dates | tojson }}'>
+        <button type="submit"
+          style="width:100%;background:{{ tile.color }};color:#fff;border:none;border-radius:7px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"
+          onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Add All {{ tile.missing_count }} Missing (KSH {{ '{:,.0f}'.format(tile.total_amount) }})
+        </button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% include '_filter.html' %}
+
+<!-- Breakdown + import helper -->
+<div class="g-21" style="margin-bottom:20px;">
+  <div class="card" style="padding:16px 18px;">
+    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+      <svg width="14" height="14" fill="none" stroke="#875a7b" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg>
+      Expense Breakdown — {{ filter_label }}
+    </div>
+    {% if by_category %}
+    {% set max_val = by_category[0].total|float %}
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      {% for c in by_category %}
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span style="color:#374151;font-weight:600;">{{ c.category }}</span>
+          <span style="color:#875a7b;font-weight:700;">KSH {{ '{:,.0f}'.format(c.total|float) }}
+            <span style="color:#9ca3af;font-weight:400;font-size:11px;">({{ c.cnt }}×)</span>
+          </span>
+        </div>
+        <div style="background:#f3f4f6;border-radius:4px;height:6px;">
+          <div style="background:linear-gradient(90deg,#875a7b,#a56a9b);border-radius:4px;height:6px;width:{{ ((c.total|float / max_val)*100)|round }}%;transition:width .4s;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="font-size:13px;color:#9ca3af;margin:0;">No manual expenses for this period.</p>
+    {% endif %}
+  </div>
+
+  <div class="card" style="padding:16px 18px;background:linear-gradient(135deg,#f9fafb,#f3f4f6);">
+    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+      <svg width="14" height="14" fill="none" stroke="#875a7b" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Import from Excel
+    </div>
+    <p style="font-size:12.5px;color:#6b7280;margin:0 0 10px;line-height:1.6;">
+      Drag or click <strong>Import XLS</strong> above. Accepts any spreadsheet.<br><br>
+      Supported columns:
+    </p>
+    <div style="font-size:11.5px;color:#6b7280;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;font-family:monospace;line-height:1.8;">
+      date / invoice_date<br>
+      vendor / partner / supplier<br>
+      category / account<br>
+      description / label / product<br>
+      amount / amount_total / total
+    </div>
+    <p style="font-size:11.5px;color:#9ca3af;margin:8px 0 0;">Odoo Excel export format supported natively.</p>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:16px;">
+  <button onclick="showTab('manual')" class="exp-tab active" id="tab-manual">
+    Manual Entries ({{ manual|length }})
+  </button>
+  <button onclick="showTab('odoo')" class="exp-tab" id="tab-odoo">
+    Odoo Vendor Bills ({{ odoo_bills|length }})
+  </button>
+</div>
+
+<!-- Manual expenses -->
+<div id="pane-manual">
+  <div class="card" style="overflow:hidden;">
+    {% if manual %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th><th>Category</th><th>Description</th><th>Vendor</th>
+          <th class="r">Amount</th><th class="c">Freq</th><th class="c">Source</th><th class="c">Del</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in manual %}
+        <tr>
+          <td style="color:#6b7280;white-space:nowrap;">{{ e.expense_date }}</td>
+          <td style="font-weight:500;">{{ e.category }}</td>
+          <td style="color:#374151;">{{ e.description or '—' }}</td>
+          <td style="color:#6b7280;">{{ e.vendor or '—' }}</td>
+          <td class="r" style="color:#dc2626;font-weight:600;">KSH {{ '{:,.0f}'.format(e.amount|float) }}</td>
+          <td class="c">
+            <span style="background:#f3f4f6;color:#6b7280;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">{{ e.frequency | title }}</span>
+          </td>
+          <td class="c">
+            {% if e.source == 'smart-fill' %}
+            <span style="background:#f5f0f4;color:#875a7b;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">Smart</span>
+            {% elif e.source == 'import' %}
+            <span class="badge-info">Import</span>
+            {% else %}
+            <span class="badge-neutral">Manual</span>
+            {% endif %}
+          </td>
+          <td class="c">
+            <form method="POST" style="display:inline;">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="id" value="{{ e.id }}">
+              <button type="submit" onclick="return confirm('Delete?')"
+                style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:11px;padding:0;">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:50px;">
+      <div style="font-size:32px;margin-bottom:10px;">📋</div>
+      <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px;">No Manual Expenses</div>
+      <div style="font-size:13px;color:#9ca3af;">Add expenses manually or import an Excel file.</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Odoo bills -->
+<div id="pane-odoo" style="display:none;">
+  <div class="card" style="overflow:hidden;">
+    {% if odoo_bills %}
+    <table class="data-table">
+      <thead>
+        <tr><th>Reference</th><th>Date</th><th>Vendor</th><th class="r">Amount</th><th class="c">Payment</th></tr>
+      </thead>
+      <tbody>
+        {% for b in odoo_bills %}
+        <tr>
+          <td style="font-family:monospace;font-size:12px;color:#6b7280;">{{ b.ref }}</td>
+          <td style="color:#6b7280;">{{ b.expense_date or '—' }}</td>
+          <td style="font-weight:500;">{{ b.vendor }}</td>
+          <td class="r" style="color:#dc2626;font-weight:600;">KSH {{ '{:,.0f}'.format(b.amount|float) }}</td>
+          <td class="c">
+            {% if b.payment_state == 'paid' %}<span class="badge-ok">Paid</span>
+            {% elif b.payment_state == 'partial' %}<span class="badge-warn">Partial</span>
+            {% else %}<span class="badge-neutral">{{ b.payment_state | replace('_',' ') | title }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:50px;">
+      <div style="font-size:32px;margin-bottom:10px;">🏦</div>
+      <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px;">No Vendor Bills</div>
+      <div style="font-size:13px;color:#9ca3af;">No posted vendor bills found in Odoo for this period.</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Add Expense Modal -->
+<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:0;width:100%;max-width:460px;max-height:90vh;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,.3);">
+    <!-- Modal header -->
+    <div style="background:linear-gradient(135deg,#875a7b,#5c3d53);padding:18px 22px;color:#fff;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:15px;font-weight:700;">Add Expense</div>
+        <div style="font-size:11px;opacity:.7;margin-top:2px;">Record a new business expense</div>
+      </div>
+      <button onclick="document.getElementById('add-modal').style.display='none'"
+        style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
+    </div>
+    <!-- Modal body -->
+    <div style="padding:22px;overflow-y:auto;max-height:calc(90vh - 70px);">
+    <form method="POST" id="add-form">
+      <input type="hidden" name="action" value="add">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Date *</label>
+          <input type="date" name="expense_date" id="field-date"
+            style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
+            onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'" required>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Amount (KSH) *</label>
+          <input type="number" name="amount" id="field-amount" step="0.01" min="0"
+            style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
+            onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'" required>
+        </div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Category *</label>
+        <input type="text" name="category" id="field-category" list="cat-list" placeholder="Rent, Salary, Utilities…"
+          style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
+          onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'" required>
+        <datalist id="cat-list">
+          {% for cat in ['Rent','Salary','Utilities','Transport','Marketing','Insurance','Internet','Phone','Office Supplies','Maintenance','Stock Purchase'] %}
+          <option value="{{ cat }}">{% endfor %}
+          {% for c in categories %}<option value="{{ c.category }}">{% endfor %}
+        </datalist>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Vendor / Payee</label>
+        <input type="text" name="vendor" id="field-vendor"
+          style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
+          onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Description</label>
+        <input type="text" name="description"
+          style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
+          onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'">
+      </div>
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Frequency</label>
+        <div style="display:flex;gap:6px;">
+          {% for val, lbl in [('once','One-time'),('weekly','Weekly'),('monthly','Monthly'),('annual','Annual')] %}
+          <label style="flex:1;text-align:center;">
+            <input type="radio" name="frequency" value="{{ val }}" {% if val == 'monthly' %}checked{% endif %}
+              style="display:none;" onchange="this.parentElement.style.background=this.checked?'#875a7b':'#f9fafb';this.parentElement.style.color=this.checked?'#fff':'#6b7280';">
+            <span id="freq-{{ val }}" style="display:block;padding:7px 0;border-radius:6px;font-size:12px;font-weight:500;border:1px solid #e5e7eb;background:{% if val == 'monthly' %}#875a7b{% else %}#f9fafb{% endif %};color:{% if val == 'monthly' %}#fff{% else %}#6b7280{% endif %};cursor:pointer;">
+              {{ lbl }}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <button type="submit"
+        style="width:100%;background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:7px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(135,90,123,.3);">
+        Save Expense
+      </button>
+    </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('field-date').value = new Date().toISOString().split('T')[0];
+
+document.querySelectorAll('input[name="frequency"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    document.querySelectorAll('input[name="frequency"]').forEach(r => {
+      const span = r.parentElement.querySelector('span');
+      span.style.background = r.checked ? '#875a7b' : '#f9fafb';
+      span.style.color      = r.checked ? '#fff' : '#6b7280';
+    });
+  });
+});
+
+function prefillAdd(vendor, amount, category) {
+  document.getElementById('field-vendor').value   = vendor || '';
+  document.getElementById('field-amount').value   = amount || '';
+  document.getElementById('field-category').value = category || '';
+  document.getElementById('field-date').value     = new Date().toISOString().split('T')[0];
+  document.getElementById('add-modal').style.display = 'flex';
+}
+
+function showTab(name) {
+  ['manual','odoo'].forEach(t => {
+    document.getElementById('pane-'+t).style.display = t === name ? '' : 'none';
+    document.getElementById('tab-'+t).classList.toggle('active', t === name);
+  });
+}
+
+document.getElementById('add-modal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+</script>
+{% endblock %}

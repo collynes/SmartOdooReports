@@ -1,0 +1,97 @@
+{% set periods = [
+  ('today',   'Today'),
+  ('week',    'Week'),
+  ('month',   'Month'),
+  ('quarter', 'Quarter'),
+  ('year',    'Year'),
+  ('last30',  '30 Days'),
+  ('last90',  '90 Days'),
+] %}
+
+{% set cmp_options = [
+  ('prev',        'Prev Period'),
+  ('lastmonth',   'Last Month'),
+  ('lastquarter', 'Last Quarter'),
+  ('lastyear',    'Last Year'),
+  ('custom',      'Custom'),
+] %}
+
+{% set period_cmp_defaults = {'month':'lastmonth','quarter':'lastquarter','year':'lastyear'} %}
+{% set active_cmp = request.args.get('cmp', session.get('cmp', period_cmp_defaults.get(filter_period, 'prev'))) %}
+
+<div class="filter-bar" style="flex-direction:column;align-items:stretch;gap:8px;padding:10px 14px;">
+
+  <!-- Row 1: period pills + custom dates + label + compare toggle -->
+  <div style="display:flex;align-items:center;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;min-height:34px;">
+
+    <svg width="13" height="13" fill="none" stroke="#9ca3af" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+
+    {% for val, lbl in periods %}
+    <a href="?period={{ val }}&compare={{ compare }}&cmp={{ active_cmp }}"
+       class="period-btn {% if filter_period == val %}active{% endif %}"
+       style="white-space:nowrap;flex-shrink:0;padding:4px 11px;font-size:12px;">{{ lbl }}</a>
+    {% endfor %}
+
+    <!-- Custom range -->
+    <div style="display:flex;align-items:center;gap:5px;border-left:1px solid #e5e7eb;padding-left:8px;flex-shrink:0;">
+      <form method="GET" style="display:flex;align-items:center;gap:5px;" id="range-form">
+        <input type="hidden" name="compare" value="{{ compare }}">
+        <input type="hidden" name="cmp" value="{{ active_cmp }}">
+        <input type="date" name="from" value="{{ custom_from }}"
+          style="border:1px solid #e5e7eb;border-radius:5px;padding:3px 6px;font-size:11.5px;color:#374151;background:#fff;width:120px;"
+          onchange="document.getElementById('range-form').submit()">
+        <span style="font-size:11px;color:#9ca3af;">–</span>
+        <input type="date" name="to" value="{{ custom_to }}"
+          style="border:1px solid #e5e7eb;border-radius:5px;padding:3px 6px;font-size:11.5px;color:#374151;background:#fff;width:120px;"
+          onchange="document.getElementById('range-form').submit()">
+      </form>
+    </div>
+
+    <!-- Label + compare toggle -->
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0;">
+      <div style="font-size:11.5px;font-weight:600;color:#875a7b;background:#f5f0f4;padding:3px 10px;border-radius:5px;border:1px solid #d9bfd3;white-space:nowrap;">
+        {{ filter_label }}
+      </div>
+
+      {% if show_compare is not defined or show_compare %}
+      <a href="?period={{ filter_period }}&compare={% if compare == '1' %}0{% else %}1{% endif %}&cmp={{ active_cmp }}{% if filter_period == 'custom' %}&from={{ custom_from }}&to={{ custom_to }}{% endif %}"
+         style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;border:1px solid {% if compare == '1' %}#875a7b{% else %}#e5e7eb{% endif %};background:{% if compare == '1' %}#f5f0f4{% else %}#f9fafb{% endif %};color:{% if compare == '1' %}#875a7b{% else %}#6b7280{% endif %};text-decoration:none;white-space:nowrap;flex-shrink:0;">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        Compare{% if compare == '1' and cmp_label %} <span style="font-weight:700;">vs {{ cmp_label }}</span>{% endif %}
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Row 2: compare options — compact single scrollable row, only when on -->
+  {% if compare == '1' %}
+  <div style="display:flex;align-items:center;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-top:6px;border-top:1px solid #f3f4f6;">
+    <span style="font-size:11px;color:#9ca3af;font-weight:600;white-space:nowrap;flex-shrink:0;">vs:</span>
+    {% for val, lbl in cmp_options %}
+    <a href="?period={{ filter_period }}&compare=1&cmp={{ val }}{% if filter_period == 'custom' %}&from={{ custom_from }}&to={{ custom_to }}{% endif %}"
+       class="period-btn {% if active_cmp == val %}active{% endif %}"
+       style="white-space:nowrap;flex-shrink:0;padding:3px 10px;font-size:11.5px;">{{ lbl }}</a>
+    {% endfor %}
+
+    {% if active_cmp == 'custom' %}
+    <form method="GET" style="display:flex;align-items:center;gap:5px;flex-shrink:0;" id="cmp-range-form">
+      <input type="hidden" name="period"  value="{{ filter_period }}">
+      <input type="hidden" name="compare" value="1">
+      <input type="hidden" name="cmp"     value="custom">
+      {% if filter_period == 'custom' %}
+      <input type="hidden" name="from" value="{{ custom_from }}">
+      <input type="hidden" name="to"   value="{{ custom_to }}">
+      {% endif %}
+      <input type="date" name="cmp_from" value="{{ session.get('cmp_from','') }}"
+        style="border:1px solid #e5e7eb;border-radius:5px;padding:3px 6px;font-size:11.5px;color:#374151;background:#fff;width:120px;"
+        onchange="document.getElementById('cmp-range-form').submit()">
+      <span style="font-size:11px;color:#9ca3af;">–</span>
+      <input type="date" name="cmp_to" value="{{ session.get('cmp_to','') }}"
+        style="border:1px solid #e5e7eb;border-radius:5px;padding:3px 6px;font-size:11.5px;color:#374151;background:#fff;width:120px;"
+        onchange="document.getElementById('cmp-range-form').submit()">
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>

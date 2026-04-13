@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.env
+.env.*
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+dismissed_anomalies.json
+
+# Backups
+*.bak
+*.bak.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

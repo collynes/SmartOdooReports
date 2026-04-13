@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Cross-sell{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Cross-sell Opportunities</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Top 5 products this period — what customers buy alongside them</p>
+  </div>
+  {% set explain_page = 'crosssell' %}{% include '_explain.html' %}
+</div>
+
+{% include '_filter.html' %}
+
+{% if results %}
+  {% for item in results %}
+  <div class="card" style="overflow:hidden;margin-bottom:14px;">
+    <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6;background:#faf5fa;display:flex;align-items:center;gap:10px;">
+      <span style="background:#875a7b;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">{{ loop.index }}</span>
+      <span style="font-weight:600;color:#374151;font-size:14px;">{{ item.anchor }}</span>
+    </div>
+    {% if item.pairs %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Paired Product</th>
+          <th class="r">Co-orders</th>
+          <th class="r">Pair Revenue</th>
+          <th class="c">Recommendation</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in item.pairs %}
+        <tr>
+          <td style="color:#374151;">{{ p.paired_product }}</td>
+          <td class="r" style="font-weight:600;">{{ p.co_orders }}</td>
+          <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(p.pair_rev|float) }}</td>
+          <td class="c">
+            {% if p.opportunity == 'Bundle' %}
+            <span class="badge-ok">Bundle Candidate</span>
+            {% elif p.opportunity == 'Promote Together' %}
+            <span class="badge-info">Promote Together</span>
+            {% else %}
+            <span class="badge-neutral">Worth Testing</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="padding:20px 18px;color:#9ca3af;font-size:13px;">No pairing data found for this product in the selected period.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+<div class="card" style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No sales data available for cross-sell analysis.</div>
+{% endif %}
+{% endblock %}

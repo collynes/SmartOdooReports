@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+{% block title %}Projections{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Compare &amp; Forecast</h1>
+      <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Linear regression model on last 90 days of data</p>
+    </div>
+    <div style="display:flex;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:3px;gap:2px;">
+      <a href="/compare" style="padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;color:#6b7280;text-decoration:none;transition:all .15s;" onmouseover="this.style.color='#875a7b'" onmouseout="this.style.color='#6b7280'">Compare</a>
+      <span style="padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);">Projections</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+    {% for h, lbl in [(7,'7 Days'),(14,'2 Weeks'),(30,'1 Month'),(90,'3 Months'),(180,'6 Months'),(365,'1 Year'),(548,'1.5 Years')] %}
+    <a href="/projections?horizon={{ h }}"
+       style="padding:5px 14px;border-radius:6px;font-size:12.5px;font-weight:500;border:1px solid {% if horizon == h %}#875a7b{% else %}#e5e7eb{% endif %};background:{% if horizon == h %}#875a7b{% else %}#f9fafb{% endif %};color:{% if horizon == h %}#fff{% else %}#6b7280{% endif %};text-decoration:none;">
+      {{ lbl }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if data.get('error') %}
+<div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:14px 18px;border-radius:8px;margin-bottom:16px;">
+  Error running projections: {{ data.error }}
+</div>
+{% endif %}
+
+<!-- Summary banners -->
+{% if data.get('summaries') %}
+<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">
+  {% for s in data.summaries %}
+  {% set bg = '#faf5fa' if s.type == 'positive' else '#fffbeb' if s.type == 'warning' else '#fff5f5' %}
+  {% set bc = '#875a7b' if s.type == 'positive' else '#d97706' if s.type == 'warning' else '#dc2626' %}
+  <div style="background:{{ bg }};border-left:3px solid {{ bc }};border-radius:0 8px 8px 0;padding:12px 16px;">
+    <div style="font-size:13.5px;font-weight:600;color:#1f2937;">{{ s.text }}</div>
+    <div style="font-size:12px;color:#6b7280;margin-top:2px;">{{ s.sub }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if data.get('revenue') %}
+{% set r = data.revenue %}
+{% set o = data.orders %}
+
+<!-- KPI projection cards -->
+<div class="g-4col" style="margin-bottom:20px;">
+  <div class="card" style="padding:16px 18px;">
+    <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Projected Revenue</div>
+    <div style="font-size:22px;font-weight:700;color:#1f2937;">KSH {{ '{:,.0f}'.format(r.total_proj) }}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:3px;">next {{ horizon }} days</div>
+  </div>
+  <div class="card" style="padding:16px 18px;">
+    <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Daily Avg (recent)</div>
+    <div style="font-size:22px;font-weight:700;color:#1f2937;">KSH {{ '{:,.0f}'.format(r.daily_avg) }}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:3px;">last 30 days</div>
+  </div>
+  <div class="card" style="padding:16px 18px;">
+    <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Revenue Trend</div>
+    <div style="font-size:22px;font-weight:700;color:{% if r.slope >= 0 %}#059669{% else %}#dc2626{% endif %};">
+      {% if r.slope >= 0 %}+{% endif %}KSH {{ '{:,.0f}'.format(r.slope|abs) }}/day
+    </div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:3px;">R² = {{ r.r2 }}</div>
+  </div>
+  <div class="card" style="padding:16px 18px;">
+    <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Projected Orders</div>
+    <div style="font-size:22px;font-weight:700;color:#1f2937;">{{ o.total_proj }}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:3px;">next {{ horizon }} days</div>
+  </div>
+</div>
+
+<!-- Revenue projection chart -->
+<div class="card" style="padding:18px 20px;margin-bottom:14px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div style="font-size:13px;font-weight:600;color:#374151;">Revenue Projection — Next {{ horizon }} Days</div>
+    <div style="display:flex;gap:14px;font-size:12px;">
+      <span style="display:flex;align-items:center;gap:5px;color:#875a7b;"><span style="width:20px;height:2px;background:#875a7b;display:inline-block;"></span>Historical</span>
+      <span style="display:flex;align-items:center;gap:5px;color:#059669;"><span style="width:20px;height:2px;background:#059669;display:inline-block;border-top:2px dashed #059669;"></span>Projected</span>
+      <span style="display:flex;align-items:center;gap:5px;color:#d1d5db;"><span style="width:20px;height:8px;background:rgba(5,150,105,.1);display:inline-block;"></span>Confidence</span>
+    </div>
+  </div>
+  <canvas id="projChart" height="90"></canvas>
+</div>
+
+<!-- Product projections table -->
+<div class="card" style="overflow:hidden;">
+  <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:600;color:#374151;">Product-Level Projections</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th class="r">Daily Avg</th>
+        <th class="r">30-Day Qty Proj.</th>
+        <th class="r">30-Day Rev Proj.</th>
+        <th class="r">90-Day Rev Proj.</th>
+        <th class="r">Stock Left</th>
+        <th class="r">Velocity Trend</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in data.products %}
+      <tr>
+        <td style="font-weight:500;color:#111827;">{{ p.product }}</td>
+        <td class="r">{{ p.daily_avg }}</td>
+        <td class="r">{{ '{:,.0f}'.format(p.proj_30d_qty|float) }}</td>
+        <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(p.proj_30d_rev|float) }}</td>
+        <td class="r" style="color:#875a7b;">KSH {{ '{:,.0f}'.format(p.proj_90d_rev|float) }}</td>
+        <td class="r" style="font-weight:600;
+          color:{% if p.days_stock_left is not none and p.days_stock_left|float <= 14 %}#dc2626
+                {% elif p.days_stock_left is not none and p.days_stock_left|float <= 30 %}#d97706
+                {% else %}#374151{% endif %};">
+          {% if p.days_stock_left is not none %}{{ p.days_stock_left|int }} days{% else %}—{% endif %}
+        </td>
+        <td class="r">
+          {% if p.velocity_trend is not none %}
+          <span style="font-size:12px;font-weight:700;font-family:monospace;
+            color:{% if p.velocity_trend|float >= 0 %}#059669{% else %}#dc2626{% endif %};">
+            {% if p.velocity_trend|float >= 0 %}+{% endif %}{{ p.velocity_trend }}%
+          </span>
+          {% else %}<span style="color:#d1d5db;">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+const histDates = {{ r.hist_dates | tojson }};
+const histRev   = {{ r.historical | tojson }};
+const projDates = {{ r.proj_dates | tojson }};
+const projRev   = {{ r.projected | tojson }};
+const upper     = {{ r.upper | tojson }};
+const lower     = {{ r.lower | tojson }};
+
+function fmtDate(s) {
+  const p = s.split('-');
+  return p[2]+'/'+p[1]+'/'+p[0].slice(2);
+}
+
+const allLabels = [...histDates.map(fmtDate), ...projDates.map(fmtDate)];
+const histFull  = [...histRev, ...new Array(projDates.length).fill(null)];
+const projFull  = [...new Array(histDates.length - 1).fill(null), histRev[histRev.length-1], ...projRev];
+const upperFull = [...new Array(histDates.length - 1).fill(null), histRev[histRev.length-1], ...upper];
+const lowerFull = [...new Array(histDates.length - 1).fill(null), histRev[histRev.length-1], ...lower];
+
+new Chart(document.getElementById('projChart').getContext('2d'), {
+  data: {
+    labels: allLabels,
+    datasets: [
+      {
+        type: 'line',
+        label: 'Historical',
+        data: histFull,
+        borderColor: '#875a7b',
+        backgroundColor: 'rgba(135,90,123,.05)',
+        fill: true, tension: 0.3,
+        pointRadius: histDates.length > 60 ? 0 : 2,
+        borderWidth: 2, spanGaps: false,
+      },
+      {
+        type: 'line',
+        label: 'Projected',
+        data: projFull,
+        borderColor: '#059669',
+        borderDash: [6, 3],
+        backgroundColor: 'transparent',
+        fill: false, tension: 0.3,
+        pointRadius: 0, borderWidth: 2, spanGaps: false,
+      },
+      {
+        type: 'line',
+        label: 'Upper bound',
+        data: upperFull,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(5,150,105,.1)',
+        fill: '+1', tension: 0.3,
+        pointRadius: 0, borderWidth: 0, spanGaps: false,
+      },
+      {
+        type: 'line',
+        label: 'Lower bound',
+        data: lowerFull,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(5,150,105,.1)',
+        fill: false, tension: 0.3,
+        pointRadius: 0, borderWidth: 0, spanGaps: false,
+      },
+    ]
+  },
+  options: {
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: c => c.dataset.label + ': KSH ' + (c.parsed.y||0).toLocaleString() } }
+    },
+    scales: {
+      x: { ticks:{color:'#9ca3af',font:{size:11},maxTicksLimit:15}, grid:{color:'#f3f4f6'} },
+      y: { ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()}, grid:{color:'#f3f4f6'} }
+    }
+  }
+});
+</script>
+
+{% else %}
+<div class="card" style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">Not enough historical data to generate projections (need at least 7 days of sales).</div>
+{% endif %}
+{% endblock %}

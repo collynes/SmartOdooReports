@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sign In — Party World</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(160deg, #2a1830 0%, #3d2645 50%, #875a7b 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 25px 60px rgba(0,0,0,.35);
+    }
+    .logo {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, #875a7b, #5c3d53);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      box-shadow: 0 8px 24px rgba(135,90,123,.4);
+    }
+    .title { font-size: 22px; font-weight: 800; color: #1f2937; margin-bottom: 4px; text-align: center; }
+    .subtitle { font-size: 13px; color: #9ca3af; text-align: center; margin-bottom: 28px; }
+    .error-box {
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+    .field { margin-bottom: 16px; }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      background: #f9fafb;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 16px; /* 16px prevents iOS zoom */
+      color: #111827;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      -webkit-appearance: none;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: #875a7b;
+      box-shadow: 0 0 0 3px rgba(135,90,123,.15);
+    }
+    .submit-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #875a7b, #5c3d53);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      letter-spacing: .02em;
+      box-shadow: 0 4px 16px rgba(135,90,123,.4);
+      transition: transform .1s, box-shadow .15s;
+      -webkit-appearance: none;
+      touch-action: manipulation;
+    }
+    .submit-btn:hover { box-shadow: 0 6px 22px rgba(135,90,123,.55); }
+    .submit-btn:active { transform: scale(.98); }
+    .pw-toggle {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; color: #9ca3af;
+      padding: 4px; line-height: 0;
+    }
+    .pw-toggle:hover { color: #875a7b; }
+    .field-wrap { position: relative; }
+    .brand-bar {
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="text-align:center;margin-bottom:28px;">
+      <div class="logo">
+        <svg width="26" height="26" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <div class="title">Party World</div>
+      <div class="subtitle">Business Intelligence Dashboard</div>
+    </div>
+
+    {% if error %}
+    <div class="error-box">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" autocomplete="on">
+      <div class="field">
+        <label for="u">Username</label>
+        <input type="text" id="u" name="username" required autofocus autocomplete="username"
+               autocapitalize="none" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="p">Password</label>
+        <div class="field-wrap">
+          <input type="password" id="p" name="password" required autocomplete="current-password">
+          <button type="button" class="pw-toggle" onclick="togglePw()" title="Show/hide password">
+            <svg id="eye-open" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg id="eye-closed" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <button type="submit" class="submit-btn">Sign In</button>
+    </form>
+    <div class="brand-bar">Party World · Nairobi · Kenya</div>
+  </div>
+
+<script>
+function togglePw() {
+  const inp = document.getElementById('p');
+  const isText = inp.type === 'text';
+  inp.type = isText ? 'password' : 'text';
+  document.getElementById('eye-open').style.display = isText ? '' : 'none';
+  document.getElementById('eye-closed').style.display = isText ? 'none' : '';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block title %}Best Products{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Best Products</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Top sellers ranked by combined revenue + quantity score</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    {% set explain_page = 'best' %}{% include '_explain.html' %}
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-table" onclick="setView('table')">Table</button>
+      <button class="view-btn" id="btn-chart" onclick="setView('chart')">Chart</button>
+    </div>
+  </div>
+</div>
+
+{% include '_filter.html' %}
+
+<!-- Table view -->
+<div id="view-table">
+  <div class="card" style="overflow:hidden;">
+    {% if rows %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:36px;">#</th><th>Product</th>
+          <th class="r">Qty Sold</th><th class="r">Revenue ({{ filter_label }})</th>
+          {% if compare == '1' and cmp_label %}
+          <th class="r" style="color:#714b67;">Revenue ({{ cmp_label }})</th>
+          <th class="r">Change</th>
+          {% endif %}
+          <th class="r">Avg Price</th><th class="r">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% set cmp = cmp_rows.get(r.product, {}) %}
+        {% set cmp_rev = cmp.revenue|float if cmp else 0 %}
+        {% set delta = ((r.revenue|float - cmp_rev) / cmp_rev * 100)|round(1) if cmp_rev > 0 else none %}
+        <tr>
+          <td style="color:#9ca3af;font-weight:600;">{% if r.rank == 1 %}<span style="color:#d97706;">1</span>{% else %}{{ r.rank }}{% endif %}</td>
+          <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+          <td class="r">{{ '{:,.0f}'.format(r.qty|float) }}</td>
+          <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</td>
+          {% if compare == '1' and cmp_label %}
+          <td class="r" style="color:#714b67;">{% if cmp_rev %}KSH {{ '{:,.0f}'.format(cmp_rev) }}{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
+          <td class="r">{% if delta is not none %}<span style="font-size:12px;font-weight:700;font-family:monospace;color:{% if delta>=0 %}#059669{% else %}#dc2626{% endif %};">{% if delta>=0 %}+{% endif %}{{ delta }}%</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
+          {% endif %}
+          <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.avg_price|float) }}</td>
+          <td class="r"><span style="background:#f5f0f4;color:#875a7b;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;">{{ r.score }}%</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No sales data for this period.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Chart view -->
+<div id="view-chart" style="display:none;">
+  <div class="g-chart">
+    <div class="card" style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Revenue by Product — {{ filter_label }}</div>
+      <canvas id="barChart" height="{% if rows|length > 10 %}160{% else %}120{% endif %}"></canvas>
+    </div>
+    <div class="card" style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Revenue Share (Top 8)</div>
+      <canvas id="pieChart" height="200"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+const prodData = {{ rows | tojson }};
+let chartsBuilt = false;
+
+function setView(v) {
+  document.getElementById('view-table').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('view-chart').style.display = v === 'chart' ? '' : 'none';
+  document.getElementById('btn-table').classList.toggle('active', v === 'table');
+  document.getElementById('btn-chart').classList.toggle('active', v === 'chart');
+  if (v === 'chart' && !chartsBuilt) buildCharts();
+}
+
+const PALETTE = ['#875a7b','#a56a9b','#714b67','#c095b8','#5c3d53','#d9bfd3','#3d2645','#ede0ea'];
+
+function buildCharts() {
+  chartsBuilt = true;
+  const labels = prodData.map(r => r.product.length > 22 ? r.product.slice(0,22)+'…' : r.product);
+  const revs   = prodData.map(r => parseFloat(r.revenue));
+
+  // Horizontal bar
+  new Chart(document.getElementById('barChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label:'Revenue',data:revs,backgroundColor:PALETTE[0],borderRadius:4,borderSkipped:false }]},
+    options: {
+      indexAxis:'y', plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+      scales: {
+        x:{type:'linear',ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},
+        y:{type:'category',ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+
+  // Donut
+  const top8 = prodData.slice(0,8);
+  new Chart(document.getElementById('pieChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: top8.map(r => r.product.length>18 ? r.product.slice(0,18)+'…':r.product),
+      datasets:[{data:top8.map(r=>parseFloat(r.revenue)),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]
+    },
+    options: {
+      cutout:'60%',
+      plugins:{
+        legend:{position:'bottom',labels:{font:{size:11},padding:8,color:'#6b7280'}},
+        tooltip:{callbacks:{label:c=>{const t=top8.reduce((s,r)=>s+parseFloat(r.revenue),0);return c.label+': KSH '+c.parsed.toLocaleString()+' ('+Math.round(c.parsed/t*100)+'%)'}}}
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,747 @@
+{% extends 'base.html' %}
+{% block title %}Products{% endblock %}
+{% block content %}
+<style>
+  .tab-btn {
+    padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;
+    border:none;background:none;color:#6b7280;cursor:pointer;transition:all .15s;
+    display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  }
+  .tab-btn.active {
+    background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;
+    box-shadow:0 2px 8px rgba(135,90,123,.3);
+  }
+  #search-drop .drop-item {
+    padding:10px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;
+    justify-content:space-between;gap:10px;border-bottom:1px solid #f9fafb;
+  }
+  #search-drop .drop-item:hover { background:#f5f0f4; }
+  #search-drop .drop-item:last-child { border-bottom:none; }
+
+  .score-bar { display:flex;align-items:center;gap:7px; }
+  .score-bar-track { flex:1;background:#f3f4f6;border-radius:3px;height:4px;max-width:44px; }
+  .score-bar-fill { border-radius:3px;height:4px;transition:width .4s; }
+  .score-pill { padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700; }
+
+  .rank-tab-bar { overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px; }
+
+  /* chart grids — stack on mobile */
+  .chart-2col { display:grid;grid-template-columns:3fr 2fr;gap:14px; }
+  @media(max-width:640px) { .chart-2col { grid-template-columns:1fr; } }
+
+  /* period comparison — stack on mobile */
+  .cmp-inputs { display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px; }
+  @media(max-width:520px) {
+    .cmp-inputs { flex-direction:column;align-items:stretch; }
+    .cmp-inputs > div { width:100%; }
+    .cmp-date-row { flex-wrap:wrap; }
+  }
+
+  /* cmp result grid */
+  .cmp-result-grid { display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center; }
+  @media(max-width:520px) {
+    .cmp-result-grid { grid-template-columns:1fr;gap:8px; }
+    .cmp-vs-col { display:flex;flex-direction:row;justify-content:center;gap:24px;padding:8px 0; }
+  }
+</style>
+
+<!-- Page header -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Products</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Search a product for full profile, or browse performance rankings below</p>
+  </div>
+  <div style="display:flex;gap:8px;" id="ai-btn-wrap"></div>
+</div>
+
+<!-- ══════════════════ PRODUCT SEARCH & PROFILE ══════════════════ -->
+<div class="card" style="margin-bottom:20px;overflow:visible;">
+
+  <!-- Search header strip -->
+  <div style="background:linear-gradient(135deg,#f5f0f4,#ede0ea);padding:14px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <svg width="16" height="16" fill="none" stroke="#875a7b" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span style="font-size:13px;font-weight:700;color:#875a7b;">Product Lookup</span>
+    <div style="flex:1;min-width:200px;position:relative;" id="search-wrap">
+      <input id="prod-search" type="text" placeholder="Search by product name or ref code…"
+             autocomplete="off"
+             style="width:100%;padding:7px 12px 7px 12px;border:1.5px solid #d9bfd3;border-radius:7px;font-size:13px;color:#111827;outline:none;box-sizing:border-box;background:#fff;"
+             oninput="onSearch(this.value)"
+             onfocus="this.style.borderColor='#875a7b'"
+             onblur="setTimeout(()=>{ this.style.borderColor='#d9bfd3'; hideDrop(); }, 180)">
+      <div id="search-drop"
+           style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #e5e7eb;
+                  border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:9999;overflow:hidden;max-height:320px;overflow-y:auto;"></div>
+    </div>
+    <span id="search-hint" style="font-size:12px;color:#9ca3af;">Type to search</span>
+  </div>
+
+  <!-- Profile panel (hidden until product selected) -->
+  <div id="profile-panel" style="display:none;padding:20px;">
+
+    <!-- Product header -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid #f3f4f6;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span id="p-name" style="font-size:18px;font-weight:700;color:#111827;"></span>
+          <span id="p-ref"  style="background:#f3f4f6;color:#6b7280;padding:2px 9px;border-radius:5px;font-size:12px;font-weight:600;"></span>
+          <span id="p-stock-badge" style="padding:2px 9px;border-radius:5px;font-size:12px;font-weight:600;"></span>
+        </div>
+        <div style="margin-top:5px;font-size:12px;color:#9ca3af;">
+          Cost: <span id="p-cost" style="font-weight:600;color:#6b7280;"></span>
+          &nbsp;·&nbsp; Avg sale price: <span id="p-avgprice" style="font-weight:600;color:#6b7280;"></span>
+        </div>
+      </div>
+      <button onclick="clearProfile()"
+        style="background:none;border:1px solid #e5e7eb;color:#9ca3af;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;">
+        ✕ Clear
+      </button>
+    </div>
+
+    <!-- KPI tiles gradient -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;">
+      <div style="background:linear-gradient(135deg,#875a7b,#5c3d53);border-radius:10px;padding:14px 16px;color:#fff;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">All-time Revenue</div>
+        <div id="k-total-rev" style="font-size:17px;font-weight:800;"></div>
+      </div>
+      <div style="background:linear-gradient(135deg,#017E84,#015060);border-radius:10px;padding:14px 16px;color:#fff;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">This Year</div>
+        <div id="k-year-rev" style="font-size:17px;font-weight:800;"></div>
+      </div>
+      <div style="background:linear-gradient(135deg,#d97706,#b45309);border-radius:10px;padding:14px 16px;color:#fff;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">Units Sold</div>
+        <div id="k-total-qty" style="font-size:17px;font-weight:800;"></div>
+      </div>
+      <div style="background:linear-gradient(135deg,#4f46e5,#3730a3);border-radius:10px;padding:14px 16px;color:#fff;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">Orders</div>
+        <div id="k-orders" style="font-size:17px;font-weight:800;"></div>
+      </div>
+      <div style="background:linear-gradient(135deg,#059669,#047857);border-radius:10px;padding:14px 16px;color:#fff;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">Avg / Month</div>
+        <div id="k-avg-monthly" style="font-size:17px;font-weight:800;"></div>
+      </div>
+    </div>
+
+    <!-- Sales history chart -->
+    <div style="margin-bottom:20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:12px;">Monthly Sales — Last 24 Months</div>
+      <div id="no-history" style="display:none;text-align:center;padding:30px;color:#9ca3af;font-size:13px;">No sales history available.</div>
+      <div id="history-wrap" style="position:relative;height:200px;">
+        <canvas id="historyChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Insight cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:20px;">
+      <div style="background:#fef9ee;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#92400e;font-weight:700;margin-bottom:6px;">🏆 Best Month</div>
+        <div id="ins-best-month" style="font-size:14px;font-weight:600;color:#111827;"></div>
+        <div id="ins-best-rev"   style="font-size:12px;color:#6b7280;margin-top:2px;"></div>
+      </div>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#991b1b;font-weight:700;margin-bottom:6px;">📉 Weakest Month</div>
+        <div id="ins-worst-month" style="font-size:14px;font-weight:600;color:#111827;"></div>
+        <div id="ins-worst-rev"   style="font-size:12px;color:#6b7280;margin-top:2px;"></div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#065f46;font-weight:700;margin-bottom:6px;">📦 Last Restock</div>
+        <div id="ins-restock-date" style="font-size:14px;font-weight:600;color:#111827;"></div>
+        <div id="ins-restock-qty"  style="font-size:12px;color:#6b7280;margin-top:2px;"></div>
+      </div>
+    </div>
+
+    <!-- Period Comparison -->
+    <div style="background:#f9fafb;border:1px solid #f3f4f6;border-radius:8px;padding:16px 18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;">Period Comparison</div>
+        <button id="cmp-toggle-btn" onclick="toggleCmpPanel()"
+          style="background:none;border:1px solid #e5e7eb;color:#9ca3af;border-radius:6px;padding:3px 10px;font-size:11.5px;cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <span id="cmp-toggle-lbl">Hide</span>
+          <svg id="cmp-toggle-icon" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="transition:transform .2s;"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+      </div>
+      <div id="cmp-panel-body">
+      <div class="cmp-inputs">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;font-weight:600;color:#875a7b;margin-bottom:4px;">PERIOD A</div>
+          <div class="cmp-date-row" style="display:flex;gap:6px;align-items:center;">
+            <input type="date" id="p1-from" style="border:1px solid #e5e7eb;border-radius:5px;padding:5px 8px;font-size:12px;color:#374151;flex:1;min-width:0;">
+            <span style="font-size:12px;color:#9ca3af;flex-shrink:0;">to</span>
+            <input type="date" id="p1-to"   style="border:1px solid #e5e7eb;border-radius:5px;padding:5px 8px;font-size:12px;color:#374151;flex:1;min-width:0;">
+          </div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;">PERIOD B</div>
+          <div class="cmp-date-row" style="display:flex;gap:6px;align-items:center;">
+            <input type="date" id="p2-from" style="border:1px solid #e5e7eb;border-radius:5px;padding:5px 8px;font-size:12px;color:#374151;flex:1;min-width:0;">
+            <span style="font-size:12px;color:#9ca3af;flex-shrink:0;">to</span>
+            <input type="date" id="p2-to"   style="border:1px solid #e5e7eb;border-radius:5px;padding:5px 8px;font-size:12px;color:#374151;flex:1;min-width:0;">
+          </div>
+        </div>
+        <button onclick="runComparison()"
+          style="background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end;">
+          Compare
+        </button>
+      </div>
+
+      <!-- Comparison results -->
+      <div id="cmp-result" style="display:none;">
+        <div class="cmp-result-grid">
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px;">
+            <div style="font-size:11px;font-weight:600;color:#875a7b;margin-bottom:8px;">PERIOD A</div>
+            <div id="cmp-p1-dates" style="font-size:11px;color:#9ca3af;margin-bottom:8px;"></div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div><span style="font-size:11px;color:#9ca3af;">Revenue</span><br><span id="cmp-p1-rev" style="font-size:16px;font-weight:700;color:#059669;"></span></div>
+              <div><span style="font-size:11px;color:#9ca3af;">Units</span><br><span id="cmp-p1-qty" style="font-size:14px;font-weight:600;color:#374151;"></span></div>
+              <div><span style="font-size:11px;color:#9ca3af;">Orders</span><br><span id="cmp-p1-orders" style="font-size:14px;font-weight:600;color:#374151;"></span></div>
+              <div><span style="font-size:11px;color:#9ca3af;">Avg Price</span><br><span id="cmp-p1-price" style="font-size:14px;font-weight:600;color:#374151;"></span></div>
+            </div>
+          </div>
+          <div class="cmp-vs-col" style="text-align:center;padding:0 8px;">
+            <div>
+              <div id="cmp-rev-chg"  style="font-size:18px;font-weight:800;margin-bottom:4px;"></div>
+              <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Revenue</div>
+            </div>
+            <div style="margin:10px 0;border-top:1px solid #e5e7eb;" class="cmp-divider"></div>
+            <div>
+              <div id="cmp-qty-chg"  style="font-size:16px;font-weight:700;margin-bottom:2px;"></div>
+              <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Units</div>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px;">
+            <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:8px;">PERIOD B</div>
+            <div id="cmp-p2-dates" style="font-size:11px;color:#9ca3af;margin-bottom:8px;"></div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div><span style="font-size:11px;color:#9ca3af;">Revenue</span><br><span id="cmp-p2-rev" style="font-size:16px;font-weight:700;color:#059669;"></span></div>
+              <div><span style="font-size:11px;color:#9ca3af;">Units</span><br><span id="cmp-p2-qty" style="font-size:14px;font-weight:600;color:#374151;"></span></div>
+              <div><span style="font-size:11px;color:#9ca3af;">Orders</span><br><span id="cmp-p2-orders" style="font-size:14px;font-weight:600;color:#374151;"></span></div>
+              <div><span style="font-size:11px;color:#9ca3af;">Avg Price</span><br><span id="cmp-p2-price" style="font-size:14px;font-weight:600;color:#374151;"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="cmp-empty" style="font-size:12px;color:#9ca3af;text-align:center;padding:8px 0;">
+        Select date ranges above and click Compare.
+      </div>
+      </div><!-- /cmp-panel-body -->
+    </div>
+
+  </div><!-- /profile-panel -->
+</div>
+
+<!-- ══════════════════ PRODUCT RANKINGS ══════════════════ -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+  <div>
+    <h2 style="font-size:15px;font-weight:700;color:#374151;margin:0;">Product Rankings</h2>
+    <p style="font-size:12px;color:#9ca3af;margin:2px 0 0;">{{ filter_label }}</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-table" onclick="setView('table')">Table</button>
+      <button class="view-btn" id="btn-chart"  onclick="setView('chart')">Chart</button>
+    </div>
+  </div>
+</div>
+
+{% include '_filter.html' with context %}
+
+<!-- Tab bar -->
+<div class="rank-tab-bar" style="margin-bottom:18px;">
+<div style="display:flex;gap:4px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:5px;width:max-content;min-width:100%;">
+  <button class="tab-btn active" id="tab-best"     onclick="setTab('best')">
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="18 20 18 10"/><polyline points="12 20 12 4"/><polyline points="6 20 6 14"/></svg>Best Sellers
+    {% if best_rows %}<span style="font-size:10px;opacity:.7;">({{ best_rows|length }})</span>{% endif %}
+  </button>
+  <button class="tab-btn" id="tab-momentum" onclick="setTab('momentum')">
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>Momentum
+    {% if mom_rows %}<span style="font-size:10px;opacity:.7;">({{ mom_rows|length }})</span>{% endif %}
+  </button>
+  <button class="tab-btn" id="tab-sleeping" onclick="setTab('sleeping')">
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>Sleeping Giants
+    {% if sleep_rows %}<span style="font-size:10px;opacity:.7;">({{ sleep_rows|length }})</span>{% endif %}
+  </button>
+  <button class="tab-btn" id="tab-under" onclick="setTab('under')">
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 3 9 21 6 12 2 12"/></svg>Underperforming
+    {% if under_rows %}<span style="font-size:10px;opacity:.7;">({{ under_rows|length }})</span>{% endif %}
+  </button>
+</div>
+</div>
+
+<!-- ═══ BEST SELLERS ═══ -->
+<div id="pane-best">
+  <div id="best-table-view">
+    <div class="card" style="overflow:hidden;">
+      {% if best_rows %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:36px;">#</th><th>Product</th>
+            <th class="r">Qty Sold</th>
+            <th class="r">Revenue</th>
+            <th class="r">Avg Price</th>
+            <th class="r">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in best_rows %}
+          <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
+            <td>
+              {% if r.rank == 1 %}
+              <span style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">1</span>
+              {% elif r.rank == 2 %}
+              <span style="background:#94a3b8;color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">2</span>
+              {% elif r.rank == 3 %}
+              <span style="background:#cd7c2f;color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">3</span>
+              {% else %}
+              <span style="color:#9ca3af;font-weight:600;font-size:12px;">{{ r.rank }}</span>
+              {% endif %}
+            </td>
+            <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+            <td class="r">{{ '{:,.0f}'.format(r.qty|float) }}</td>
+            <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</td>
+            <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.avg_price|float) }}</td>
+            <td class="r">
+              <div class="score-bar">
+                <div class="score-bar-track"><div class="score-bar-fill" style="background:#875a7b;width:{{ r.score }}%;"></div></div>
+                <span class="score-pill" style="background:#f5f0f4;color:#875a7b;">{{ r.score }}%</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No sales data for this period.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div id="best-chart-view" style="display:none;">
+    <div class="chart-2col">
+      <div class="card" style="padding:18px 20px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Revenue by Product — {{ filter_label }}</div>
+        <canvas id="bestBarChart" height="{% if best_rows|length > 10 %}160{% else %}120{% endif %}"></canvas>
+      </div>
+      <div class="card" style="padding:18px 20px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Revenue Share (Top 8)</div>
+        <canvas id="bestPieChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MOMENTUM ═══ -->
+<div id="pane-momentum" style="display:none;">
+  <div id="mom-table-view">
+    <div class="card" style="overflow:hidden;">
+      {% if mom_rows %}
+      <table class="data-table">
+        <thead><tr><th>Product</th><th class="r">Prior</th><th class="r">Current</th><th class="r">Rev Δ</th><th class="r">Qty Δ</th><th class="r">Score</th></tr></thead>
+        <tbody>
+          {% for r in mom_rows %}
+          <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
+            <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+            <td class="r" style="color:#9ca3af;">KSH {{ '{:,.0f}'.format(r.prev_rev|float) }}</td>
+            <td class="r" style="font-weight:600;">KSH {{ '{:,.0f}'.format(r.curr_rev|float) }}</td>
+            <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.rev_chg }}%</td>
+            <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.qty_chg }}%</td>
+            <td class="r">
+              <div class="score-bar">
+                <div class="score-bar-track"><div class="score-bar-fill" style="background:#059669;width:{{ r.score }}%;"></div></div>
+                <span class="score-pill" style="background:#d1fae5;color:#065f46;">{{ r.score }}%</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No momentum data — need sales in both current and prior period.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div id="mom-chart-view" style="display:none;">
+    <div class="chart-2col">
+      <div class="card" style="padding:18px 20px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Prior vs Current Revenue</div>
+        <canvas id="momBarChart" height="{% if mom_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+      </div>
+      <div class="card" style="padding:18px 20px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Growth Score</div>
+        <canvas id="momScoreChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLEEPING GIANTS ═══ -->
+<div id="pane-sleeping" style="display:none;">
+  <div id="sleep-table-view">
+    <div class="card" style="overflow:hidden;">
+      {% if sleep_rows %}
+      <table class="data-table">
+        <thead><tr><th>Product</th><th class="r">Peak Revenue</th><th class="r">Recent</th><th class="r">Decline</th><th class="c">Status</th></tr></thead>
+        <tbody>
+          {% for r in sleep_rows %}
+          <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
+            <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+            <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.peak_rev|float) }}</td>
+            <td class="r">KSH {{ '{:,.0f}'.format(r.recent_rev|float) }}</td>
+            <td class="r">
+              <div class="score-bar" style="justify-content:flex-end;">
+                <div class="score-bar-track"><div class="score-bar-fill" style="background:#dc2626;width:{{ [r.decline_pct, 100]|min }}%;"></div></div>
+                <span class="score-pill" style="background:#fee2e2;color:#991b1b;font-family:monospace;">-{{ r.decline_pct }}%</span>
+              </div>
+            </td>
+            <td class="c">
+              {% if r.status == 'GONE SILENT' %}<span class="badge-critical">Gone Silent</span>
+              {% elif r.status == 'CRITICAL DROP' %}<span style="background:#fed7aa;color:#9a3412;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">Critical Drop</span>
+              {% else %}<span class="badge-warn">Declining</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">Top products are holding steady.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div id="sleep-chart-view" style="display:none;">
+    <div class="chart-2col">
+      <div class="card" style="padding:18px 20px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Peak vs Recent Revenue</div>
+        <canvas id="sleepBarChart" height="{% if sleep_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+      </div>
+      <div class="card" style="padding:18px 20px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Decline %</div>
+        <canvas id="sleepDeclineChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ UNDERPERFORMING ═══ -->
+<div id="pane-under" style="display:none;">
+  <div id="under-table-view">
+    <div class="card" style="overflow:hidden;">
+      {% if under_rows %}
+      <table class="data-table">
+        <thead><tr><th>Product</th><th class="r">Expected</th><th class="r">Actual</th><th class="r">Drop</th><th class="c">Status</th></tr></thead>
+        <tbody>
+          {% for r in under_rows %}
+          <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
+            <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+            <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.expected_rev|float) }}</td>
+            <td class="r">KSH {{ '{:,.0f}'.format(r.actual_rev|float) }}</td>
+            <td class="r">
+              <div class="score-bar" style="justify-content:flex-end;">
+                <div class="score-bar-track"><div class="score-bar-fill" style="background:#dc2626;width:{{ [r.drop_pct, 100]|min }}%;"></div></div>
+                <span class="score-pill" style="background:#fee2e2;color:#991b1b;font-family:monospace;">-{{ r.drop_pct }}%</span>
+              </div>
+            </td>
+            <td class="c">
+              {% if r.status == 'NO SALES' %}<span class="badge-critical">No Sales</span>
+              {% else %}<span class="badge-warn">Slow</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">All products within normal range.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div id="under-chart-view" style="display:none;">
+    <div class="chart-2col">
+      <div class="card" style="padding:18px 20px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Expected vs Actual Revenue</div>
+        <canvas id="underBarChart" height="{% if under_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+      </div>
+      <div class="card" style="padding:18px 20px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Drop %</div>
+        <canvas id="underDropChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PALETTE = ['#875a7b','#a56a9b','#714b67','#c095b8','#5c3d53','#d9bfd3','#3d2645','#ede0ea'];
+const bestData  = {{ best_rows  | tojson }};
+const momData   = {{ mom_rows   | tojson }};
+const sleepData = {{ sleep_rows | tojson }};
+const underData = {{ under_rows | tojson }};
+
+const ALL_TABS = ['best','momentum','sleeping','under'];
+let currentTab = 'best', currentView = 'table';
+const builtCharts = {};
+
+document.getElementById('ai-btn-wrap').innerHTML =
+  `<button onclick="loadExplain('best')" title="AI Insight"
+    style="background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(135,90,123,.3);">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+    </svg>AI Insight</button>`;
+
+function setTab(tab) {
+  ALL_TABS.forEach(t => {
+    document.getElementById('pane-'+t).style.display = t===tab ? '' : 'none';
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+  });
+  currentTab = tab;
+  if (currentView === 'chart') buildCharts(tab);
+}
+function setView(v) {
+  currentView = v;
+  document.getElementById('btn-table').classList.toggle('active', v==='table');
+  document.getElementById('btn-chart').classList.toggle('active', v==='chart');
+  ALL_TABS.forEach(t => {
+    document.getElementById(t+'-table-view').style.display = v==='table' ? '' : 'none';
+    document.getElementById(t+'-chart-view').style.display = v==='chart' ? '' : 'none';
+  });
+  if (v === 'chart') buildCharts(currentTab);
+}
+
+// ── Product Search ────────────────────────────────────────────
+let searchTimer = null;
+let activeProductId = null;
+let histChart = null;
+let cmpPanelOpen = true;
+
+function toggleCmpPanel() {
+  cmpPanelOpen = !cmpPanelOpen;
+  document.getElementById('cmp-panel-body').style.display = cmpPanelOpen ? '' : 'none';
+  document.getElementById('cmp-toggle-lbl').textContent = cmpPanelOpen ? 'Hide' : 'Show';
+  document.getElementById('cmp-toggle-icon').style.transform = cmpPanelOpen ? '' : 'rotate(180deg)';
+}
+
+function onSearch(val) {
+  clearTimeout(searchTimer);
+  const drop = document.getElementById('search-drop');
+  const hint = document.getElementById('search-hint');
+  if (val.length < 1) { drop.style.display='none'; hint.style.display=''; return; }
+  hint.style.display='none';
+  searchTimer = setTimeout(() => {
+    fetch('/api/product-search?q=' + encodeURIComponent(val))
+      .then(r => r.json()).then(rows => {
+        if (!rows.length) { drop.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:#9ca3af;">No products found.</div>'; }
+        else {
+          drop.innerHTML = rows.map(r =>
+            `<div class="drop-item" onclick="loadProfile(${r.id}, '${(r.ref||'').replace(/'/g,"\\'")}', '${r.name.replace(/'/g,"\\'")}')">
+               <span><strong style="color:#111827;">${r.name}</strong>${r.ref ? ' <span style="color:#9ca3af;font-size:11px;">['+r.ref+']</span>' : ''}</span>
+               <span style="font-size:11px;color:${r.stock>0?'#059669':'#dc2626'};font-weight:600;">${Number(r.stock).toLocaleString()} in stock</span>
+             </div>`
+          ).join('');
+        }
+        drop.style.display = '';
+      });
+  }, 250);
+}
+
+function hideDrop() {
+  document.getElementById('search-drop').style.display = 'none';
+}
+
+function fmt(n) { return n == null ? '—' : 'KSH ' + Number(n).toLocaleString(); }
+function fmtN(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+
+function loadProfile(id, ref, name) {
+  activeProductId = id;
+  document.getElementById('search-drop').style.display = 'none';
+  document.getElementById('prod-search').value = name + (ref ? ' ['+ref+']' : '');
+  fetch('/api/product-profile?id=' + id)
+    .then(r => r.json())
+    .then(d => renderProfile(d));
+}
+
+function renderProfile(d) {
+  document.getElementById('profile-panel').style.display = '';
+  document.getElementById('p-name').textContent = d.name || '';
+  document.getElementById('p-ref').textContent  = d.ref ? '[' + d.ref + ']' : '';
+  const stockEl = document.getElementById('p-stock-badge');
+  const stock = Number(d.stock || 0);
+  stockEl.textContent = fmtN(stock) + ' in stock';
+  stockEl.style.background = stock > 0 ? '#d1fae5' : '#fee2e2';
+  stockEl.style.color       = stock > 0 ? '#065f46' : '#991b1b';
+  document.getElementById('p-cost').textContent    = d.cost > 0 ? fmt(d.cost) : '—';
+  document.getElementById('p-avgprice').textContent = fmt(d.avg_price);
+  document.getElementById('k-total-rev').textContent    = fmt(d.total_rev);
+  document.getElementById('k-year-rev').textContent     = fmt(d.year_rev);
+  document.getElementById('k-total-qty').textContent    = fmtN(d.total_qty);
+  document.getElementById('k-orders').textContent       = fmtN(d.order_count);
+  document.getElementById('k-avg-monthly').textContent  = fmt(d.avg_monthly_rev);
+
+  if (histChart) { histChart.destroy(); histChart = null; }
+  if (!d.monthly || !d.monthly.length) {
+    document.getElementById('no-history').style.display = '';
+    document.getElementById('history-wrap').style.display = 'none';
+  } else {
+    document.getElementById('no-history').style.display = 'none';
+    document.getElementById('history-wrap').style.display = '';
+    const labels = d.monthly.map(m => m.month);
+    const revs   = d.monthly.map(m => m.revenue);
+    const qtys   = d.monthly.map(m => m.qty);
+    histChart = new Chart(document.getElementById('historyChart').getContext('2d'), {
+      data: {
+        labels,
+        datasets: [
+          { type:'bar',  label:'Revenue', data:revs, backgroundColor:'rgba(135,90,123,.55)', borderColor:'#875a7b', borderWidth:1, borderRadius:3, yAxisID:'y' },
+          { type:'line', label:'Units',   data:qtys, borderColor:'#059669', backgroundColor:'rgba(5,150,105,.08)', borderWidth:2, pointRadius:3, tension:.35, fill:true, yAxisID:'y2' }
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:'top', labels:{ font:{size:11}, color:'#6b7280', padding:10 } },
+                  tooltip:{ callbacks:{ label: c => c.dataset.label==='Revenue' ? 'KSH '+c.parsed.y.toLocaleString() : c.parsed.y.toLocaleString()+' units' } } },
+        scales: {
+          x:  { ticks:{ color:'#9ca3af', font:{size:10}, maxRotation:45 }, grid:{ display:false } },
+          y:  { position:'left',  ticks:{ color:'#9ca3af', font:{size:10}, callback:v=>'KSH '+v.toLocaleString() }, grid:{ color:'#f3f4f6' } },
+          y2: { position:'right', ticks:{ color:'#059669', font:{size:10}, callback:v=>v.toLocaleString() }, grid:{ display:false } }
+        }
+      }
+    });
+  }
+
+  if (d.best_month) {
+    document.getElementById('ins-best-month').textContent = d.best_month.month;
+    document.getElementById('ins-best-rev').textContent   = fmt(d.best_month.revenue) + ' · ' + fmtN(d.best_month.qty) + ' units';
+  }
+  if (d.worst_month) {
+    document.getElementById('ins-worst-month').textContent = d.worst_month.month;
+    document.getElementById('ins-worst-rev').textContent   = fmt(d.worst_month.revenue) + ' · ' + fmtN(d.worst_month.qty) + ' units';
+  }
+  if (d.last_restock) {
+    document.getElementById('ins-restock-date').textContent = d.last_restock.restock_date;
+    document.getElementById('ins-restock-qty').textContent  = fmtN(d.last_restock.qty) + ' units' + (d.last_restock.reference ? ' · ' + d.last_restock.reference : '');
+  } else {
+    document.getElementById('ins-restock-date').textContent = 'No restock on record';
+    document.getElementById('ins-restock-qty').textContent  = '';
+  }
+
+  document.getElementById('cmp-result').style.display = 'none';
+  document.getElementById('cmp-empty').style.display  = '';
+  document.getElementById('profile-panel').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function clearProfile() {
+  activeProductId = null;
+  document.getElementById('prod-search').value = '';
+  document.getElementById('profile-panel').style.display = 'none';
+  if (histChart) { histChart.destroy(); histChart = null; }
+}
+
+function selectProductByName(name) {
+  document.getElementById('prod-search').value = name;
+  fetch('/api/product-search?q=' + encodeURIComponent(name))
+    .then(r => r.json())
+    .then(rows => {
+      const match = rows.find(r => r.name === name) || rows[0];
+      if (match) loadProfile(match.id, match.ref, match.name);
+    });
+}
+
+// ── Period Comparison ──────────────────────────────────────────
+function runComparison() {
+  if (!activeProductId) return;
+  const p1f = document.getElementById('p1-from').value;
+  const p1t = document.getElementById('p1-to').value;
+  const p2f = document.getElementById('p2-from').value;
+  const p2t = document.getElementById('p2-to').value;
+  if (!p1f || !p1t || !p2f || !p2t) { alert('Please fill all four date fields.'); return; }
+  const url = `/api/product-profile?id=${activeProductId}&p1_from=${p1f}&p1_to=${p1t}&p2_from=${p2f}&p2_to=${p2t}`;
+  fetch(url).then(r => r.json()).then(d => {
+    const p1 = d.period1 || {}, p2 = d.period2 || {};
+    const r1 = Number(p1.revenue||0), r2 = Number(p2.revenue||0);
+    const q1 = Number(p1.qty||0),     q2 = Number(p2.qty||0);
+    document.getElementById('cmp-p1-dates').textContent = p1f + ' → ' + p1t;
+    document.getElementById('cmp-p2-dates').textContent = p2f + ' → ' + p2t;
+    document.getElementById('cmp-p1-rev').textContent   = fmt(p1.revenue);
+    document.getElementById('cmp-p1-qty').textContent   = fmtN(p1.qty);
+    document.getElementById('cmp-p1-orders').textContent= fmtN(p1.orders);
+    document.getElementById('cmp-p1-price').textContent = fmt(p1.avg_price);
+    document.getElementById('cmp-p2-rev').textContent   = fmt(p2.revenue);
+    document.getElementById('cmp-p2-qty').textContent   = fmtN(p2.qty);
+    document.getElementById('cmp-p2-orders').textContent= fmtN(p2.orders);
+    document.getElementById('cmp-p2-price').textContent = fmt(p2.avg_price);
+    function chgHtml(a, b) {
+      if (!a) return '<span style="color:#9ca3af;">—</span>';
+      const pct = ((b - a) / a * 100).toFixed(1);
+      const up = b >= a;
+      return `<span style="color:${up?'#059669':'#dc2626'};font-size:${Math.abs(pct)>20?'20':'16'}px;">${up?'▲':'▼'} ${up?'+':''}${pct}%</span>`;
+    }
+    document.getElementById('cmp-rev-chg').innerHTML = chgHtml(r1, r2);
+    document.getElementById('cmp-qty-chg').innerHTML = chgHtml(q1, q2);
+    document.getElementById('cmp-result').style.display = '';
+    document.getElementById('cmp-empty').style.display  = 'none';
+  });
+}
+
+// ── Rankings Charts ───────────────────────────────────────────
+function buildCharts(tab) {
+  if (builtCharts[tab]) return;
+  builtCharts[tab] = true;
+  if (tab === 'best' && bestData.length) {
+    const labels = bestData.map(r => r.product.length>22 ? r.product.slice(0,22)+'…':r.product);
+    new Chart(document.getElementById('bestBarChart').getContext('2d'), {
+      type:'bar', data:{labels, datasets:[{label:'Revenue',data:bestData.map(r=>parseFloat(r.revenue)),backgroundColor:PALETTE[0],borderRadius:4,borderSkipped:false}]},
+      options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+        scales:{x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}
+    });
+    const top8 = bestData.slice(0,8);
+    new Chart(document.getElementById('bestPieChart').getContext('2d'), {
+      type:'doughnut',
+      data:{labels:top8.map(r=>r.product.length>18?r.product.slice(0,18)+'…':r.product),datasets:[{data:top8.map(r=>parseFloat(r.revenue)),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+      options:{cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.toLocaleString()}}}}
+    });
+  }
+  if (tab === 'momentum' && momData.length) {
+    const labels = momData.map(r => r.product.length>20?r.product.slice(0,20)+'…':r.product);
+    new Chart(document.getElementById('momBarChart').getContext('2d'), {
+      type:'bar', data:{labels, datasets:[
+        {label:'Prior',data:momData.map(r=>parseFloat(r.prev_rev)),backgroundColor:'rgba(135,90,123,.35)',borderColor:'#875a7b',borderWidth:1,borderRadius:3},
+        {label:'Current',data:momData.map(r=>parseFloat(r.curr_rev)),backgroundColor:'rgba(5,150,105,.7)',borderColor:'#059669',borderWidth:1,borderRadius:3}
+      ]},
+      options:{indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+        scales:{x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}
+    });
+    new Chart(document.getElementById('momScoreChart').getContext('2d'), {
+      type:'bar', data:{labels, datasets:[{label:'Score',data:momData.map(r=>parseFloat(r.score)),backgroundColor:'rgba(5,150,105,.7)',borderRadius:4}]},
+      options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.x+'%'}}},
+        scales:{x:{min:0,ticks:{color:'#9ca3af',font:{size:11},callback:v=>v+'%'},grid:{color:'#f3f4f6'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}
+    });
+  }
+  if (tab === 'sleeping' && sleepData.length) {
+    const labels = sleepData.map(r => r.product.length>20?r.product.slice(0,20)+'…':r.product);
+    new Chart(document.getElementById('sleepBarChart').getContext('2d'), {
+      type:'bar', data:{labels, datasets:[
+        {label:'Peak',data:sleepData.map(r=>parseFloat(r.peak_rev)),backgroundColor:'rgba(135,90,123,.35)',borderColor:'#875a7b',borderWidth:1,borderRadius:3},
+        {label:'Recent',data:sleepData.map(r=>parseFloat(r.recent_rev)),backgroundColor:'rgba(220,38,38,.65)',borderColor:'#dc2626',borderWidth:1,borderRadius:3}
+      ]},
+      options:{indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+        scales:{x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}
+    });
+    new Chart(document.getElementById('sleepDeclineChart').getContext('2d'), {
+      type:'bar', data:{labels, datasets:[{label:'Decline %',data:sleepData.map(r=>parseFloat(r.decline_pct)),backgroundColor:'rgba(220,38,38,.65)',borderRadius:4}]},
+      options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'-'+c.parsed.x+'%'}}},
+        scales:{x:{min:0,ticks:{color:'#9ca3af',font:{size:11},callback:v=>v+'%'},grid:{color:'#f3f4f6'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}
+    });
+  }
+  if (tab === 'under' && underData.length) {
+    const labels = underData.map(r => r.product.length>20?r.product.slice(0,20)+'…':r.product);
+    new Chart(document.getElementById('underBarChart').getContext('2d'), {
+      type:'bar', data:{labels, datasets:[
+        {label:'Expected',data:underData.map(r=>parseFloat(r.expected_rev)),backgroundColor:'rgba(107,114,128,.25)',borderColor:'#6b7280',borderWidth:1,borderRadius:3},
+        {label:'Actual',data:underData.map(r=>parseFloat(r.actual_rev)),backgroundColor:'rgba(220,38,38,.65)',borderColor:'#dc2626',borderWidth:1,borderRadius:3}
+      ]},
+      options:{indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+        scales:{x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}
+    });
+    new Chart(document.getElementById('underDropChart').getContext('2d'), {
+      type:'bar', data:{labels, datasets:[{label:'Drop %',data:underData.map(r=>parseFloat(r.drop_pct)),backgroundColor:'rgba(220,38,38,.65)',borderRadius:4}]},
+      options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'-'+c.parsed.x+'%'}}},
+        scales:{x:{min:0,ticks:{color:'#9ca3af',font:{size:11},callback:v=>v+'%'},grid:{color:'#f3f4f6'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}
+    });
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Reorder Alerts{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:18px;">
+  <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Reorder Alerts</h1>
+  <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Products projected to run out soon based on current stock and sales velocity — filter sets the velocity window</p>
+</div>
+
+{% include '_filter.html' %}
+
+<!-- Legend -->
+<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+  <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">
+    <span class="badge-critical">Critical</span> Runs out in 7 days or less
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">
+    <span class="badge-warn">Order Soon</span> Runs out in 8–14 days
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">
+    <span class="badge-info">Watch</span> Runs out in 15–30 days
+  </div>
+</div>
+
+<div class="card" style="overflow:hidden;">
+  {% if rows %}
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th class="c">Alert</th>
+        <th class="r">Available</th>
+        <th class="r">Daily Rate</th>
+        <th class="r">Days Left</th>
+        <th class="r">Suggest Order (60d)</th>
+        <th class="r">Unit Cost</th>
+        <th class="r">Est. Reorder Cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      {% set urgent = r.days_left is not none and r.days_left|float <= 7 %}
+      {% set soon   = r.days_left is not none and r.days_left|float <= 14 %}
+      <tr style="{% if urgent %}background:#fff5f5;{% elif soon %}background:#fffbeb;{% endif %}">
+        <td style="font-weight:600;color:#111827;">{{ r.product }}</td>
+        <td class="c">
+          {% if r.alert == 'CRITICAL' %}<span class="badge-critical">Critical</span>
+          {% elif r.alert == 'ORDER SOON' %}<span class="badge-warn">Order Soon</span>
+          {% elif r.alert == 'WATCH' %}<span class="badge-info">Watch</span>
+          {% else %}<span class="badge-ok">OK</span>{% endif %}
+        </td>
+        <td class="r">{{ '{:,.0f}'.format(r.available|float) }}</td>
+        <td class="r" style="color:#6b7280;">{{ r.daily_sales }}/day</td>
+        <td class="r" style="font-weight:700;
+          color:{% if urgent %}#dc2626{% elif soon %}#d97706{% else %}#374151{% endif %};">
+          {% if r.days_left is not none %}{{ r.days_left|int }} days{% else %}—{% endif %}
+        </td>
+        <td class="r" style="color:#875a7b;font-weight:600;">{{ '{:,.0f}'.format(r.suggested_order_qty|float) }} units</td>
+        <td class="r" style="color:#6b7280;">
+          {% if r.unit_cost and r.unit_cost|float > 0 %}KSH {{ '{:,.0f}'.format(r.unit_cost|float) }}{% else %}—{% endif %}
+        </td>
+        <td class="r" style="font-weight:600;color:#1f2937;">
+          {% if r.reorder_cost and r.reorder_cost|float > 0 %}KSH {{ '{:,.0f}'.format(r.reorder_cost|float) }}{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#f9fafb;border-top:2px solid #e5e7eb;">
+        <td colspan="7" style="font-size:12px;font-weight:600;color:#6b7280;padding:10px 14px;">Total estimated reorder cost</td>
+        <td class="r" style="font-weight:700;color:#875a7b;padding:10px 14px;">
+          KSH {{ '{:,.0f}'.format(rows|sum(attribute='reorder_cost')|float) }}
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">
+    <svg width="40" height="40" fill="none" stroke="#059669" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto 12px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    All products have sufficient stock for the next 30 days.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block title %}Sleeping Giants{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Sleeping Giants</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Former top products now showing significant revenue decline — worth re-activating</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    {% set explain_page = 'sleeping' %}{% include '_explain.html' %}
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-table" onclick="setView('table')">Table</button>
+      <button class="view-btn" id="btn-chart" onclick="setView('chart')">Chart</button>
+    </div>
+  </div>
+</div>
+
+{% include '_filter.html' %}
+
+<!-- Table view -->
+<div id="view-table">
+  <div class="card" style="overflow:hidden;">
+    {% if rows %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th class="r">Peak Revenue</th>
+          <th class="r">Recent Revenue</th>
+          <th class="r">Decline</th>
+          <th class="c">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+          <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.peak_rev|float) }}</td>
+          <td class="r">KSH {{ '{:,.0f}'.format(r.recent_rev|float) }}</td>
+          <td class="r" style="color:#dc2626;font-weight:600;font-family:monospace;">-{{ r.decline_pct }}%</td>
+          <td class="c">
+            {% if r.status == 'GONE SILENT' %}
+            <span class="badge-critical">Gone Silent</span>
+            {% elif r.status == 'CRITICAL DROP' %}
+            <span style="background:#fed7aa;color:#9a3412;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">Critical Drop</span>
+            {% else %}
+            <span class="badge-warn">Declining</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">Top products are holding steady — no sleeping giants detected.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Chart view -->
+<div id="view-chart" style="display:none;">
+  <div class="g-chart">
+    <div class="card" style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Peak vs Recent Revenue</div>
+      <canvas id="sleepBarChart" height="{% if rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+    </div>
+    <div class="card" style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Decline % by Product</div>
+      <canvas id="sleepDeclineChart" height="200"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+const sleepData = {{ rows | tojson }};
+let chartsBuilt = false;
+
+function setView(v) {
+  document.getElementById('view-table').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('view-chart').style.display = v === 'chart' ? '' : 'none';
+  document.getElementById('btn-table').classList.toggle('active', v === 'table');
+  document.getElementById('btn-chart').classList.toggle('active', v === 'chart');
+  if (v === 'chart' && !chartsBuilt) buildCharts();
+}
+
+function buildCharts() {
+  chartsBuilt = true;
+  const labels = sleepData.map(r => r.product.length > 20 ? r.product.slice(0,20)+'…' : r.product);
+
+  // Grouped bar: peak vs recent
+  new Chart(document.getElementById('sleepBarChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Peak Revenue', data:sleepData.map(r=>parseFloat(r.peak_rev)), backgroundColor:'rgba(135,90,123,.35)', borderColor:'#875a7b', borderWidth:1, borderRadius:3 },
+        { label:'Recent Revenue', data:sleepData.map(r=>parseFloat(r.recent_rev)), backgroundColor:'rgba(220,38,38,.65)', borderColor:'#dc2626', borderWidth:1, borderRadius:3 },
+      ]
+    },
+    options: {
+      indexAxis:'y',
+      plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+      scales:{
+        x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},
+        y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+
+  // Decline % bar
+  new Chart(document.getElementById('sleepDeclineChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets:[{ label:'Decline %', data:sleepData.map(r=>parseFloat(r.decline_pct)), backgroundColor:'rgba(220,38,38,.65)', borderRadius:4 }]
+    },
+    options: {
+      indexAxis:'y',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'-'+c.parsed.x+'%'}}},
+      scales:{
+        x:{min:0,ticks:{color:'#9ca3af',font:{size:11},callback:v=>v+'%'},grid:{color:'#f3f4f6'}},
+        y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

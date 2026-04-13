@@ -1,0 +1,461 @@
+{% extends 'base.html' %}
+{% block title %}Ask Data — Claude AI{% endblock %}
+{% block content %}
+
+<div style="display:flex;flex-direction:column;height:calc(100vh - 72px);max-width:900px;margin:0 auto;">
+
+  <!-- Header -->
+  <div style="padding-bottom:12px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="background:linear-gradient(135deg,#875a7b,#5c3d53);width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="white" opacity=".3"/><path d="M9 8h2v8H9zm4 0h2v8h-2z" fill="white"/></svg>
+      </div>
+      <div>
+        <h1 style="font-size:17px;font-weight:700;color:#1f2937;margin:0;">Ask Your Data</h1>
+        <p style="font-size:12px;color:#9ca3af;margin:0;">Powered by Claude AI · Live Odoo database</p>
+      </div>
+    </div>
+    <button onclick="clearChat()" title="Clear conversation"
+      style="background:none;border:1px solid #e5e7eb;border-radius:8px;padding:5px 10px;font-size:12px;color:#9ca3af;cursor:pointer;display:flex;align-items:center;gap:5px;">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+      New chat
+    </button>
+  </div>
+
+  <!-- Messages -->
+  <div id="messages" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding-bottom:12px;">
+
+    <!-- Welcome -->
+    <div class="msg-bot">
+      <div class="bot-avatar">
+        <svg width="13" height="13" fill="white" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm0 14.5c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+      </div>
+      <div class="bubble-bot">
+        <div style="font-weight:600;color:#1f2937;margin-bottom:6px;">Hi! I'm your Party World data analyst.</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:10px;">I can query your live Odoo database to answer questions about sales, products, expenses, stock, and more. Try:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <button class="chip" onclick="ask('What were total sales this month?')">Sales this month</button>
+          <button class="chip" onclick="ask('Show me top 10 products by revenue this year')">Top products 2025</button>
+          <button class="chip" onclick="ask('What is our net profit for 2025?')">Net profit 2025</button>
+          <button class="chip" onclick="ask('Which products are low on stock?')">Low stock alerts</button>
+          <button class="chip" onclick="ask('Compare revenue: this month vs last month')">Month comparison</button>
+          <button class="chip" onclick="ask('What are our biggest expenses this year?')">Top expenses</button>
+          <button class="chip" onclick="ask('Show daily revenue trend for March 2026')">Daily trend</button>
+          <button class="chip" onclick="ask('How much have we spent on salaries in 2025?')">Salary costs</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Input bar -->
+  <div style="flex-shrink:0;padding-top:10px;border-top:1px solid #e5e7eb;">
+    <div style="display:flex;gap:8px;align-items:flex-end;">
+      <textarea id="input" rows="1" placeholder="Ask anything about your business data…"
+        style="flex:1;border:1.5px solid #e5e7eb;border-radius:12px;padding:11px 14px;font-size:14px;color:#1f2937;resize:none;outline:none;font-family:inherit;line-height:1.5;max-height:120px;overflow-y:auto;transition:border-color .15s;"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"
+        onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
+      <button id="send-btn" onclick="sendMessage()"
+        style="background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:12px;width:44px;height:44px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+    <div style="font-size:11px;color:#d1d5db;text-align:center;margin-top:5px;">Claude AI · queries run against your live database</div>
+  </div>
+</div>
+
+<style>
+.msg-user { display:flex; justify-content:flex-end; }
+.msg-bot  { display:flex; justify-content:flex-start; align-items:flex-start; gap:9px; }
+.bubble-user {
+  background:linear-gradient(135deg,#875a7b,#5c3d53);
+  color:#fff; border-radius:16px 16px 4px 16px;
+  padding:10px 15px; font-size:14px; max-width:78%; line-height:1.55;
+}
+.bubble-bot {
+  background:#fff; border:1px solid #e5e7eb; border-radius:4px 16px 16px 16px;
+  padding:14px 16px; font-size:13.5px; color:#374151; max-width:100%; line-height:1.65;
+  flex:1; box-shadow:0 1px 3px rgba(0,0,0,.05);
+}
+.bubble-bot strong { color:#111827; }
+.bubble-bot p { margin:0 0 8px; }
+.bubble-bot p:last-child { margin-bottom:0; }
+.bot-avatar {
+  width:30px; height:30px; border-radius:8px; flex-shrink:0; margin-top:2px;
+  background:linear-gradient(135deg,#875a7b,#5c3d53);
+  display:flex; align-items:center; justify-content:center;
+}
+.chip {
+  background:#f5f0f4; color:#875a7b; border:1px solid #d9bfd3;
+  border-radius:20px; padding:4px 12px; font-size:12.5px; font-weight:500;
+  cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.chip:hover { background:#875a7b; color:#fff; border-color:#875a7b; }
+
+/* Thinking pill */
+.think-pill {
+  display:inline-flex; align-items:center; gap:6px;
+  background:#f9fafb; border:1px solid #e5e7eb; border-radius:20px;
+  padding:4px 12px; font-size:11.5px; color:#9ca3af; margin-bottom:8px;
+  cursor:pointer; user-select:none; transition:background .15s;
+}
+.think-pill:hover { background:#f3f4f6; }
+.think-pill.active { color:#92400e; background:#fefce8; border-color:#fde68a; }
+.think-pill.error  { color:#991b1b; background:#fef2f2; border-color:#fecaca; }
+.think-detail {
+  font-size:11.5px; color:#9ca3af; background:#f9fafb; border:1px solid #f3f4f6;
+  border-radius:8px; padding:8px 12px; margin-bottom:8px;
+  display:none; line-height:1.7;
+}
+.think-row { display:flex; align-items:center; gap:6px; }
+.think-row.ok  { color:#166534; }
+.think-row.err { color:#991b1b; }
+
+/* Typing cursor */
+.cursor { display:inline-block; width:2px; height:14px; background:#875a7b; margin-left:1px; animation:blink .7s step-end infinite; vertical-align:text-bottom; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* Thinking dots */
+.thinking { display:flex; gap:4px; align-items:center; padding:4px 0; }
+.thinking-dot { width:6px; height:6px; background:#d1d5db; border-radius:50%; animation:think .9s ease-in-out infinite; }
+.thinking-dot:nth-child(2) { animation-delay:.18s; }
+.thinking-dot:nth-child(3) { animation-delay:.36s; }
+@keyframes think { 0%,60%,100%{transform:translateY(0);background:#d1d5db} 30%{transform:translateY(-5px);background:#875a7b} }
+
+/* Data table */
+.data-table-chat { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }
+.data-table-chat th { padding:6px 10px; text-align:left; font-size:11px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.05em; color:#9ca3af;
+  border-bottom:2px solid #e5e7eb; background:#fafafa; }
+.data-table-chat td { padding:6px 10px; border-bottom:1px solid #f3f4f6; color:#374151; }
+.data-table-chat tr:last-child td { border-bottom:none; }
+.data-table-chat tr:hover td { background:#faf5fa; }
+#messages { scrollbar-width:thin; scrollbar-color:#e5e7eb transparent; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script>
+let isStreaming = false;
+let chatHistory = [];   // [{role:'user'|'assistant', content:'...'}]
+let chartCounter = 0;
+
+const PALETTE = ['#875a7b','#017E84','#F77E53','#28A745','#0071CE','#E67E22','#D63031','#9B59B6','#1ABC9C','#2ECC71'];
+
+// ── Helpers ──────────────────────────────────────────────────
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+function ask(q) {
+  document.getElementById('input').value = q;
+  sendMessage();
+}
+function scrollBottom() {
+  const m = document.getElementById('messages');
+  m.scrollTop = m.scrollHeight;
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Markdown renderer: tables, bold, italic, headings, lists, code, line breaks
+function renderMarkdown(s) {
+  const lines = s.split('\n');
+  const out = [];
+  let i = 0;
+
+  function inlineFormat(t) {
+    return t
+      .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>');
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // ── Heading ──────────────────────────────────────────────
+    const hm = line.match(/^(#{1,3})\s+(.+)/);
+    if (hm) {
+      const lvl = hm[1].length;
+      const sz  = lvl === 1 ? '16px' : lvl === 2 ? '14px' : '13px';
+      out.push(`<div style="font-weight:700;font-size:${sz};color:#111827;margin:10px 0 4px">${inlineFormat(escHtml(hm[2]))}</div>`);
+      i++; continue;
+    }
+
+    // ── Table block ──────────────────────────────────────────
+    if (line.trim().startsWith('|') && i + 1 < lines.length && lines[i + 1].trim().match(/^\|[\s\-:|]+\|/)) {
+      const headerCells = line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      i += 2; // skip header + separator
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        const cells = lines[i].trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        rows.push(cells);
+        i++;
+      }
+      const thead = `<tr>${headerCells.map(c => `<th>${inlineFormat(escHtml(c))}</th>`).join('')}</tr>`;
+      const tbody = rows.map(r => `<tr>${r.map(c => `<td>${inlineFormat(escHtml(c))}</td>`).join('')}</tr>`).join('');
+      out.push(`<div style="overflow-x:auto;margin:10px 0"><table class="data-table-chat"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`);
+      continue;
+    }
+
+    // ── Bullet list ──────────────────────────────────────────
+    if (line.match(/^[-*]\s+/)) {
+      const items = [];
+      while (i < lines.length && lines[i].match(/^[-*]\s+/)) {
+        items.push(`<li style="margin:2px 0">${inlineFormat(escHtml(lines[i].replace(/^[-*]\s+/, '')))}</li>`);
+        i++;
+      }
+      out.push(`<ul style="margin:6px 0 6px 18px;padding:0;list-style:disc">${items.join('')}</ul>`);
+      continue;
+    }
+
+    // ── Numbered list ─────────────────────────────────────────
+    if (line.match(/^\d+\.\s+/)) {
+      const items = [];
+      while (i < lines.length && lines[i].match(/^\d+\.\s+/)) {
+        items.push(`<li style="margin:2px 0">${inlineFormat(escHtml(lines[i].replace(/^\d+\.\s+/, '')))}</li>`);
+        i++;
+      }
+      out.push(`<ol style="margin:6px 0 6px 18px;padding:0">${items.join('')}</ol>`);
+      continue;
+    }
+
+    // ── Horizontal rule ───────────────────────────────────────
+    if (line.trim().match(/^---+$/) || line.trim().match(/^\*\*\*+$/)) {
+      out.push(`<hr style="border:none;border-top:1px solid #e5e7eb;margin:10px 0">`);
+      i++; continue;
+    }
+
+    // ── Blank line ────────────────────────────────────────────
+    if (line.trim() === '') {
+      out.push('<br>');
+      i++; continue;
+    }
+
+    // ── Plain paragraph line ──────────────────────────────────
+    out.push(`<span>${inlineFormat(escHtml(line))}<br></span>`);
+    i++;
+  }
+
+  return out.join('');
+}
+
+function addUserBubble(text) {
+  const div = document.createElement('div');
+  div.className = 'msg-user';
+  div.innerHTML = `<div class="bubble-user">${escHtml(text)}</div>`;
+  document.getElementById('messages').appendChild(div);
+  scrollBottom();
+}
+
+// Create a bot bubble that we'll stream into
+function createBotBubble() {
+  const uid = 'b' + Date.now();
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-bot';
+  wrap.innerHTML = `
+    <div class="bot-avatar">
+      <svg width="13" height="13" fill="white" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm0 14.5c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+    </div>
+    <div class="bubble-bot">
+      <div class="thinking"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div>
+      <div id="think-pill-${uid}" class="think-pill active" onclick="toggleThink('${uid}')" style="display:none">
+        <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="think-spin-${uid}" style="animation:spin .8s linear infinite"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <span id="think-label-${uid}">Querying…</span>
+        <svg width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="think-chevron-${uid}"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="think-detail-${uid}" class="think-detail"></div>
+      <div id="stream-text-${uid}" style="display:none;"></div>
+    </div>`;
+  document.getElementById('messages').appendChild(wrap);
+  scrollBottom();
+  wrap._uid = uid;
+  wrap._queryCount = 0;
+  wrap._rowTotal = 0;
+  return wrap;
+}
+
+function toggleThink(uid) {
+  const d = document.getElementById('think-detail-' + uid);
+  d.style.display = d.style.display === 'none' ? 'block' : 'none';
+}
+
+function buildTable(rows) {
+  if (!rows || !rows.length) return '';
+  const keys = Object.keys(rows[0]);
+  const thead = keys.map(k => `<th>${escHtml(k)}</th>`).join('');
+  const tbody = rows.map(r => '<tr>' + keys.map(k => `<td>${escHtml(String(r[k]??''))}</td>`).join('') + '</tr>').join('');
+  return `<div style="overflow-x:auto;margin-top:10px;"><table class="data-table-chat"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+}
+
+function clearChat() {
+  chatHistory = [];
+  const m = document.getElementById('messages');
+  // Keep only the welcome message (first child)
+  while (m.children.length > 1) m.removeChild(m.lastChild);
+}
+
+// ── Main send ────────────────────────────────────────────────
+async function sendMessage() {
+  const input   = document.getElementById('input');
+  const sendBtn = document.getElementById('send-btn');
+  const question = input.value.trim();
+  if (!question || isStreaming) return;
+
+  isStreaming = true;
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+  sendBtn.style.opacity = '0.45';
+
+  addUserBubble(question);
+
+  // Create streaming bubble
+  const bubble   = createBotBubble();
+  const uid      = bubble._uid;
+  const thinking = bubble.querySelector('.thinking');
+  const pill     = document.getElementById('think-pill-' + uid);
+  const pillLbl  = document.getElementById('think-label-' + uid);
+  const pillSpin = document.getElementById('think-spin-' + uid);
+  const detail   = document.getElementById('think-detail-' + uid);
+  const textDiv  = document.getElementById('stream-text-' + uid);
+
+  let fullText = '';
+  let cursorEl = null;
+  let lastDesc = '';
+
+  // Build SSE URL — send history for multi-turn context
+  const historyParam = encodeURIComponent(JSON.stringify(
+    chatHistory.slice(-10)
+  ));
+  const url = `/api/chat-stream?q=${encodeURIComponent(question)}&history=${historyParam}`;
+
+  const evtSource = new EventSource(url);
+
+  evtSource.onmessage = function(e) {
+    const msg = JSON.parse(e.data);
+
+    if (msg.type === 'token') {
+      // First token — hide thinking dots, show text
+      if (thinking.style.display !== 'none') {
+        thinking.style.display = 'none';
+        textDiv.style.display = '';
+        cursorEl = document.createElement('span');
+        cursorEl.className = 'cursor';
+        textDiv.appendChild(cursorEl);
+      }
+      fullText += msg.text;
+      cursorEl.insertAdjacentHTML('beforebegin', escHtml(msg.text).replace(/\n/g,'<br>'));
+      scrollBottom();
+    }
+
+    else if (msg.type === 'tool_start') {
+      // Show pill on first query, update label
+      thinking.style.display = 'none';
+      pill.style.display = 'inline-flex';
+      lastDesc = msg.desc || 'Querying…';
+      pillLbl.textContent = lastDesc;
+      bubble._queryCount++;
+      // Append to detail log (hidden by default)
+      detail.insertAdjacentHTML('beforeend',
+        `<div class="think-row" id="trow-${uid}-${bubble._queryCount}">` +
+        `<svg width="10" height="10" fill="none" stroke="#d97706" stroke-width="2" viewBox="0 0 24 24" style="animation:spin .8s linear infinite;flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>` +
+        `<span>${escHtml(lastDesc)}</span></div>`
+      );
+      scrollBottom();
+    }
+
+    else if (msg.type === 'tool_done') {
+      bubble._rowTotal += (msg.rows || 0);
+      // Update the last detail row
+      const trow = document.getElementById(`trow-${uid}-${bubble._queryCount}`);
+      if (trow) {
+        trow.className = 'think-row ok';
+        trow.innerHTML =
+          `<svg width="10" height="10" fill="none" stroke="#16a34a" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>` +
+          `<span>${escHtml(lastDesc)} <span style="color:#9ca3af">· ${msg.rows} row${msg.rows!==1?'s':''}</span></span>`;
+      }
+      // Keep pill label quiet
+      pillLbl.textContent = `${bubble._queryCount} quer${bubble._queryCount!==1?'ies':'y'}`;
+    }
+
+    else if (msg.type === 'tool_error') {
+      const trow = document.getElementById(`trow-${uid}-${bubble._queryCount}`);
+      if (trow) {
+        trow.className = 'think-row err';
+        trow.innerHTML =
+          `<svg width="10" height="10" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>` +
+          `<span>${escHtml(lastDesc)} <span style="color:#dc2626">· error</span></span>`;
+      }
+      pill.classList.add('error');
+    }
+
+    else if (msg.type === 'error') {
+      thinking.style.display = 'none';
+      textDiv.style.display = '';
+      textDiv.innerHTML = `<span style="color:#dc2626;">Error: ${escHtml(msg.text)}</span>`;
+      finish();
+    }
+
+    else if (msg.type === 'done') {
+      finish();
+    }
+  };
+
+  evtSource.onerror = function() {
+    evtSource.close();
+    if (thinking.style.display !== 'none') {
+      thinking.style.display = 'none';
+      textDiv.style.display = '';
+      textDiv.innerHTML = '<span style="color:#dc2626;">Connection lost. Please try again.</span>';
+    }
+    finish();
+  };
+
+  function finish() {
+    evtSource.close();
+
+    // Collapse pill: stop spinner, show count, mark done
+    if (pill.style.display !== 'none') {
+      pillSpin.style.animation = 'none';
+      pillSpin.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+      pillSpin.setAttribute('viewBox','0 0 24 24');
+      pill.classList.remove('active');
+      if (bubble._queryCount > 0) {
+        pillLbl.textContent = `${bubble._queryCount} quer${bubble._queryCount!==1?'ies':'y'} · ${bubble._rowTotal} rows`;
+      }
+    }
+
+    // Remove cursor, render full markdown
+    if (cursorEl) cursorEl.remove();
+    if (fullText) {
+      textDiv.innerHTML = renderMarkdown(fullText);
+    }
+
+    // Save to history for multi-turn
+    chatHistory.push({ role: 'user', content: question });
+    chatHistory.push({ role: 'assistant', content: fullText });
+
+    isStreaming = false;
+    sendBtn.disabled = false;
+    sendBtn.style.opacity = '1';
+    document.getElementById('input').focus();
+    scrollBottom();
+  }
+}
+
+// Spin animation for tool badge loader
+const style = document.createElement('style');
+style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+document.head.appendChild(style);
+
+document.getElementById('input').focus();
+</script>
+{% endblock %}

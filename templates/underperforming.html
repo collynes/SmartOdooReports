@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block title %}Underperforming{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Underperforming Products</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Products where actual sales fell below 50% of their historical average for the selected period</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    {% set explain_page = 'underperforming' %}{% include '_explain.html' %}
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-table" onclick="setView('table')">Table</button>
+      <button class="view-btn" id="btn-chart" onclick="setView('chart')">Chart</button>
+    </div>
+  </div>
+</div>
+
+{% include '_filter.html' %}
+
+<!-- Table view -->
+<div id="view-table">
+  <div class="card" style="overflow:hidden;">
+    {% if rows %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th class="r">Expected</th>
+          <th class="r">Actual</th>
+          <th class="r">Drop</th>
+          <th class="c">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+          <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.expected_rev|float) }}</td>
+          <td class="r">KSH {{ '{:,.0f}'.format(r.actual_rev|float) }}</td>
+          <td class="r" style="color:#dc2626;font-weight:600;font-family:monospace;">-{{ r.drop_pct }}%</td>
+          <td class="c">
+            {% if r.status == 'NO SALES' %}
+            <span class="badge-critical">No Sales</span>
+            {% else %}
+            <span class="badge-warn">Slow</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">All products within normal performance range.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Chart view -->
+<div id="view-chart" style="display:none;">
+  <div class="g-chart">
+    <div class="card" style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Expected vs Actual Revenue</div>
+      <canvas id="underBarChart" height="{% if rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+    </div>
+    <div class="card" style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Revenue Gap (% Drop)</div>
+      <canvas id="underDropChart" height="200"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+const underData = {{ rows | tojson }};
+let chartsBuilt = false;
+
+function setView(v) {
+  document.getElementById('view-table').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('view-chart').style.display = v === 'chart' ? '' : 'none';
+  document.getElementById('btn-table').classList.toggle('active', v === 'table');
+  document.getElementById('btn-chart').classList.toggle('active', v === 'chart');
+  if (v === 'chart' && !chartsBuilt) buildCharts();
+}
+
+function buildCharts() {
+  chartsBuilt = true;
+  const labels = underData.map(r => r.product.length > 20 ? r.product.slice(0,20)+'…' : r.product);
+
+  // Grouped bar: expected vs actual
+  new Chart(document.getElementById('underBarChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Expected', data:underData.map(r=>parseFloat(r.expected_rev)), backgroundColor:'rgba(107,114,128,.25)', borderColor:'#6b7280', borderWidth:1, borderRadius:3 },
+        { label:'Actual', data:underData.map(r=>parseFloat(r.actual_rev)), backgroundColor:'rgba(220,38,38,.65)', borderColor:'#dc2626', borderWidth:1, borderRadius:3 },
+      ]
+    },
+    options: {
+      indexAxis:'y',
+      plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+      scales:{
+        x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},
+        y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+
+  // Drop % bar
+  new Chart(document.getElementById('underDropChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets:[{ label:'Drop %', data:underData.map(r=>parseFloat(r.drop_pct)), backgroundColor:'rgba(220,38,38,.65)', borderRadius:4 }]
+    },
+    options: {
+      indexAxis:'y',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'-'+c.parsed.x+'%'}}},
+      scales:{
+        x:{min:0,ticks:{color:'#9ca3af',font:{size:11},callback:v=>v+'%'},grid:{color:'#f3f4f6'}},
+        y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+}
+</script>
+{% endblock %}
