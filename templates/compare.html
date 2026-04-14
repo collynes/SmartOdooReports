@@ -4,12 +4,12 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Compare &amp; Forecast</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Compare periods side by side or view revenue projections</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Compare &amp; Forecast</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Compare periods side by side or view revenue projections</p>
   </div>
   <div style="display:flex;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:3px;gap:2px;">
-    <span style="padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);">Compare</span>
-    <a href="/projections" style="padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;color:#6b7280;text-decoration:none;transition:all .15s;" onmouseover="this.style.color='#875a7b'" onmouseout="this.style.color='#6b7280'">Projections</a>
+    <span style="padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);">Compare</span>
+    <a href="/projections" style="padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;color:#6b7280;text-decoration:none;transition:all .15s;" onmouseover="this.style.color='var(--p)'" onmouseout="this.style.color='#6b7280'">Projections</a>
   </div>
 </div>
 
@@ -26,7 +26,7 @@
 <div class="g-2col" style="margin-bottom:20px;">
   <!-- Period A -->
   <div class="card" style="padding:16px 18px;">
-    <div style="font-size:11px;font-weight:700;color:#875a7b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Period A</div>
+    <div style="font-size:11px;font-weight:700;color:var(--p);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Period A</div>
     <form method="GET" id="form-a">
       <input type="hidden" name="b_period" value="{{ b_period }}">
       <input type="hidden" name="b_from"   value="{{ b_from }}">
@@ -34,7 +34,7 @@
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
         {% for p in periods %}
         <button type="submit" name="a_period" value="{{ p }}"
-          style="padding:4px 12px;border-radius:5px;font-size:12px;font-weight:500;border:1px solid {% if a_period == p %}#875a7b{% else %}#e5e7eb{% endif %};background:{% if a_period == p %}#875a7b{% else %}#f9fafb{% endif %};color:{% if a_period == p %}#fff{% else %}#6b7280{% endif %};cursor:pointer;">
+          style="padding:4px 12px;border-radius:5px;font-size:12px;font-weight:500;border:1px solid {% if a_period == p %}var(--p){% else %}#e5e7eb{% endif %};background:{% if a_period == p %}var(--p){% else %}#f9fafb{% endif %};color:{% if a_period == p %}#fff{% else %}#6b7280{% endif %};cursor:pointer;">
           {{ period_labels.get(p, p) }}
         </button>
         {% endfor %}
@@ -102,7 +102,7 @@
     <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">{{ label }}</div>
     <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;">
       <div>
-        <div style="font-size:10px;color:#875a7b;font-weight:600;margin-bottom:2px;">{{ a_label }}</div>
+        <div style="font-size:10px;color:var(--p);font-weight:600;margin-bottom:2px;">{{ a_label }}</div>
         <div style="font-size:18px;font-weight:700;color:#1f2937;">
           {% if fmt_fn == 'ksh' %}KSH {{ '{:,.0f}'.format(a_kpi.get(metric, 0)|float) }}
           {% else %}{{ a_kpi.get(metric, 0) }}{% endif %}
@@ -131,7 +131,7 @@
 <!-- Top products side by side -->
 <div class="g-2col">
   <div class="card" style="overflow:hidden;">
-    <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:600;color:#875a7b;">Top Products — {{ a_label }}</div>
+    <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:600;color:var(--p);">Top Products — {{ a_label }}</div>
     <table class="data-table">
       <thead><tr><th>#</th><th>Product</th><th class="r">Revenue</th><th class="r">Qty</th></tr></thead>
       <tbody>
@@ -187,8 +187,8 @@ new Chart(document.getElementById('cmpChart').getContext('2d'), {
       {
         label: '{{ a_label }}',
         data: aData.map(d => d.revenue),
-        borderColor: '#875a7b',
-        backgroundColor: 'rgba(135,90,123,.06)',
+        borderColor: THEME.p(),
+        backgroundColor: 'THEME.alpha(.06)',
         fill: true, tension: 0.35,
         pointRadius: aData.length > 60 ? 0 : 3,
         borderWidth: 2,

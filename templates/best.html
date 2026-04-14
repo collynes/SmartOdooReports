@@ -4,8 +4,8 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Best Products</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Top sellers ranked by combined revenue + quantity score</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Best Products</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Top sellers ranked by combined revenue + quantity score</p>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     {% set explain_page = 'best' %}{% include '_explain.html' %}
@@ -49,7 +49,7 @@
           <td class="r">{% if delta is not none %}<span style="font-size:12px;font-weight:700;font-family:monospace;color:{% if delta>=0 %}#059669{% else %}#dc2626{% endif %};">{% if delta>=0 %}+{% endif %}{{ delta }}%</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
           {% endif %}
           <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.avg_price|float) }}</td>
-          <td class="r"><span style="background:#f5f0f4;color:#875a7b;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;">{{ r.score }}%</span></td>
+          <td class="r"><span style="background:#f5f0f4;color:var(--p);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;">{{ r.score }}%</span></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -86,7 +86,7 @@ function setView(v) {
   if (v === 'chart' && !chartsBuilt) buildCharts();
 }
 
-const PALETTE = ['#875a7b','#a56a9b','#714b67','#c095b8','#5c3d53','#d9bfd3','#3d2645','#ede0ea'];
+const PALETTE = [THEME.p(),THEME.pd(),'#17becf','#ff7f50','#2e8b57','#4682b4','#ffa500','#9370db'];
 
 function buildCharts() {
   chartsBuilt = true;

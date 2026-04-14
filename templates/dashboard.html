@@ -3,14 +3,14 @@
 {% block content %}
 
 <div style="margin-bottom:18px;">
-  <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Dashboard</h1>
-  <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Live sales overview</p>
+  <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Dashboard</h1>
+  <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Live sales overview</p>
 </div>
 
 <!-- Smart Insight Card -->
 {% if insight %}
   {% if insight.type == 'positive' %}
-    {% set i_bg='#faf5fa' %}{% set i_border='#875a7b' %}{% set i_icon='#875a7b' %}{% set i_icon_bg='#f5f0f4' %}
+    {% set i_bg='var(--pbg)' %}{% set i_border='var(--p)' %}{% set i_icon='var(--p)' %}{% set i_icon_bg='var(--pbg)' %}
   {% elif insight.type == 'warning' %}
     {% set i_bg='#fffbeb' %}{% set i_border='#d97706' %}{% set i_icon='#d97706' %}{% set i_icon_bg='#fef3c7' %}
   {% elif insight.type == 'alert' %}
@@ -64,7 +64,7 @@
 <div class="kpi-grid kpi-grid-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
 
   <!-- Revenue -->
-  <div class="kpi-grad" style="background:linear-gradient(135deg,#875a7b 0%,#5c3d53 100%);">
+  <div class="kpi-grad" style="background:linear-gradient(135deg,var(--p) 0%,var(--pd) 100%);">
     <div class="kpi-icon-bg"><svg width="64" height="64" fill="none" stroke="white" stroke-width="1.2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
     <div class="kpi-lbl">Revenue</div>
     <div class="kpi-val" data-count-up="{{ kpi.revenue|float|round|int }}" data-prefix="KES ">KES 0</div>
@@ -101,12 +101,12 @@
 <!-- Monthly Revenue Target — upgraded -->
 {% if monthly_target > 0 %}
 {% set target_pct = [((mtd_revenue / monthly_target) * 100)|round(1), 100]|min %}
-{% set bar_grad = 'linear-gradient(90deg,#875a7b,#c095b8)' if target_pct < 50 else ('linear-gradient(90deg,#d97706,#f59e0b)' if target_pct < 80 else 'linear-gradient(90deg,#16a34a,#22c55e)') %}
-{% set pct_color = '#16a34a' if target_pct >= 80 else ('#d97706' if target_pct >= 50 else '#875a7b') %}
+{% set bar_grad = 'linear-gradient(90deg,var(--p),var(--pbdr))' if target_pct < 50 else ('linear-gradient(90deg,#d97706,#f59e0b)' if target_pct < 80 else 'linear-gradient(90deg,#16a34a,#22c55e)') %}
+{% set pct_color = '#16a34a' if target_pct >= 80 else ('#d97706' if target_pct >= 50 else 'var(--p)') %}
 <div style="background:linear-gradient(135deg,#faf5fa,#f0e8f0);border:1px solid #e5d5e5;border-radius:14px;padding:16px 22px;margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
   <div style="flex-shrink:0;">
-    <div style="font-size:10px;font-weight:700;color:#875a7b;text-transform:uppercase;letter-spacing:.09em;margin-bottom:3px;">{{ month_label }} Target</div>
-    <div style="font-size:22px;font-weight:800;color:#3d2645;line-height:1;">KES {{ '{:,.0f}'.format(mtd_revenue) }}</div>
+    <div style="font-size:10px;font-weight:700;color:var(--p);text-transform:uppercase;letter-spacing:.09em;margin-bottom:3px;">{{ month_label }} Target</div>
+    <div style="font-size:22px;font-weight:800;color:var(--pdd);line-height:1;">KES {{ '{:,.0f}'.format(mtd_revenue) }}</div>
     <div style="font-size:12px;color:#9ca3af;margin-top:2px;">of KES {{ '{:,.0f}'.format(monthly_target) }} goal</div>
   </div>
   <div style="flex:1;min-width:180px;">
@@ -123,7 +123,7 @@
     <div style="font-size:11px;color:#16a34a;font-weight:600;margin-top:4px;">🎉 Target achieved!</div>
     {% endif %}
   </div>
-  <a href="/profile#operations" style="font-size:11.5px;color:#875a7b;font-weight:600;text-decoration:none;flex-shrink:0;white-space:nowrap;">Edit →</a>
+  <a href="/profile#operations" style="font-size:11.5px;color:var(--p);font-weight:600;text-decoration:none;flex-shrink:0;white-space:nowrap;">Edit →</a>
 </div>
 {% endif %}
 
@@ -155,10 +155,10 @@
     <div style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
         <span style="font-size:12.5px;color:#374151;font-weight:500;">{{ r.product[:26] }}{% if r.product|length > 26 %}…{% endif %}</span>
-        <span style="font-size:12px;color:#875a7b;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</span>
+        <span style="font-size:12px;color:var(--p);font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</span>
       </div>
       <div style="background:#f3f4f6;border-radius:3px;height:4px;">
-        <div style="background:#875a7b;border-radius:3px;height:4px;width:{{ ((r.revenue|float / max_rev) * 100)|round }}%;transition:width .4s;"></div>
+        <div style="background:var(--p);border-radius:3px;height:4px;width:{{ ((r.revenue|float / max_rev) * 100)|round }}%;transition:width .4s;"></div>
       </div>
     </div>
     {% endfor %}
@@ -212,19 +212,19 @@
       <div style="width:10px;height:10px;border-radius:2px;background:#f0e8f0;"></div>
       <div style="width:10px;height:10px;border-radius:2px;background:#d4adce;"></div>
       <div style="width:10px;height:10px;border-radius:2px;background:#b07aab;"></div>
-      <div style="width:10px;height:10px;border-radius:2px;background:#875a7b;"></div>
-      <div style="width:10px;height:10px;border-radius:2px;background:#5c3d53;"></div>
+      <div style="width:10px;height:10px;border-radius:2px;background:var(--p);"></div>
+      <div style="width:10px;height:10px;border-radius:2px;background:var(--pd);"></div>
       <span>More</span>
     </div>
   </div>
   <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
     <div id="heatmap-wrap" style="display:inline-flex;gap:3px;padding-bottom:4px;"></div>
   </div>
-  <div id="heatmap-tip" style="font-size:11.5px;color:#875a7b;font-weight:600;margin-top:8px;min-height:16px;text-align:center;"></div>
+  <div id="heatmap-tip" style="font-size:11.5px;color:var(--p);font-weight:600;margin-top:8px;min-height:16px;text-align:center;"></div>
 </div>
 
 <script>
-const PALETTE = ['#875a7b','#a56a9b','#714b67','#c095b8','#5c3d53','#d9bfd3','#3d2645','#ede0ea'];
+const PALETTE = [THEME.p(),THEME.pd(),'#17becf','#ff7f50','#2e8b57','#4682b4','#ffa500','#9370db'];
 let revChart = null;
 let tpPieBuilt = false;
 
@@ -241,9 +241,9 @@ fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "cust
         labels,
         datasets: [{
           data: values,
-          borderColor: '#875a7b', backgroundColor: 'rgba(135,90,123,.08)',
+          borderColor: THEME.p(), backgroundColor: THEME.alpha(.08),
           fill: true, tension: 0.35, pointRadius: ptR,
-          pointBackgroundColor: '#875a7b', borderWidth: 2,
+          pointBackgroundColor: THEME.p(), borderWidth: 2,
           borderRadius: 4,
         }]
       },
@@ -266,11 +266,11 @@ function setRevView(mode) {
   if (!revChart) return;
   revChart.config.type = mode;
   if (mode === 'bar') {
-    revChart.data.datasets[0].backgroundColor = 'rgba(135,90,123,.7)';
+    revChart.data.datasets[0].backgroundColor = 'THEME.alpha(.7)';
     revChart.data.datasets[0].fill = false;
     revChart.data.datasets[0].borderRadius = 4;
   } else {
-    revChart.data.datasets[0].backgroundColor = 'rgba(135,90,123,.08)';
+    revChart.data.datasets[0].backgroundColor = 'THEME.alpha(.08)';
     revChart.data.datasets[0].fill = true;
   }
   revChart.update();
@@ -291,7 +291,7 @@ fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "cust
     const ptR    = data.length > 60 ? 0 : 3;
 
     trendRevChart = new Chart(document.getElementById('trendRevChart').getContext('2d'), {
-      type:'bar', data:{labels,datasets:[{label:'Revenue',data:revs,backgroundColor:'rgba(135,90,123,.65)',borderRadius:3}]},
+      type:'bar', data:{labels,datasets:[{label:'Revenue',data:revs,backgroundColor:'THEME.alpha(.65)',borderRadius:3}]},
       options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
         scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:10},maxTicksLimit:12},grid:{display:false}},
                 y:{ticks:{color:'#9ca3af',font:{size:10},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}
@@ -303,7 +303,7 @@ fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "cust
                 y:{ticks:{color:'#9ca3af',font:{size:10},stepSize:1},grid:{color:'#f3f4f6'}}}}
     });
     trendBothRevChart = new Chart(document.getElementById('trendBothRevChart').getContext('2d'), {
-      type:'bar', data:{labels,datasets:[{data:revs,backgroundColor:'rgba(135,90,123,.65)',borderRadius:3}]},
+      type:'bar', data:{labels,datasets:[{data:revs,backgroundColor:'THEME.alpha(.65)',borderRadius:3}]},
       options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
         scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:9},maxTicksLimit:12},grid:{display:false}},
                 y:{ticks:{color:'#9ca3af',font:{size:9},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}
@@ -368,8 +368,8 @@ function setTPView(mode) {
         if (i < 0.3)  return '#d4adce';
         if (i < 0.5)  return '#b07aab';
         if (i < 0.7)  return '#9a6090';
-        if (i < 0.85) return '#875a7b';
-        return '#5c3d53';
+        if (i < 0.85) return THEME.p();
+        return THEME.pd();
       }
 
       // Find start of first week (Monday)

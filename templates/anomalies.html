@@ -13,25 +13,25 @@
   .prob-arc .prob-label { position:absolute;text-align:center; }
 
   .cat-btn { padding:5px 14px;border-radius:6px;font-size:12.5px;font-weight:500;border:1px solid #e5e7eb;background:#f9fafb;color:#6b7280;cursor:pointer;transition:all .12s; }
-  .cat-btn:hover { border-color:#875a7b;color:#875a7b; }
-  .cat-btn.active { border-color:#875a7b;background:#875a7b;color:#fff; }
+  .cat-btn:hover { border-color:var(--p);color:var(--p); }
+  .cat-btn.active { border-color:var(--p);background:var(--p);color:#fff; }
 
   .page-tab { padding:8px 20px;border-radius:7px 7px 0 0;font-size:13.5px;font-weight:600;border:none;background:none;color:#6b7280;cursor:pointer;transition:all .15s;border-bottom:3px solid transparent; }
-  .page-tab.active { color:#875a7b;border-bottom-color:#875a7b;background:rgba(135,90,123,.06); }
+  .page-tab.active { color:var(--p);border-bottom-color:var(--p);background:var(--p-a06); }
 </style>
 
 <!-- Page header -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Anomalies &amp; Stock</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Suspicious patterns, dead stock and inventory alerts — all in one place</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Anomalies &amp; Stock</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Suspicious patterns, dead stock and inventory alerts — all in one place</p>
   </div>
   <!-- Lookback (anomalies tab only) -->
   <div id="lookback-wrap" style="display:flex;gap:6px;align-items:center;">
     <span style="font-size:12px;color:#9ca3af;">Lookback:</span>
     {% for d, lbl in [(30,'30d'),(60,'60d'),(90,'90d'),(180,'6mo'),(365,'1yr')] %}
     <a href="/anomalies?lookback={{ d }}"
-       style="padding:4px 12px;border-radius:5px;font-size:12px;font-weight:500;border:1px solid {% if lookback == d %}#875a7b{% else %}#e5e7eb{% endif %};background:{% if lookback == d %}#875a7b{% else %}#f9fafb{% endif %};color:{% if lookback == d %}#fff{% else %}#6b7280{% endif %};text-decoration:none;">
+       style="padding:4px 12px;border-radius:5px;font-size:12px;font-weight:500;border:1px solid {% if lookback == d %}var(--p){% else %}#e5e7eb{% endif %};background:{% if lookback == d %}var(--p){% else %}#f9fafb{% endif %};color:{% if lookback == d %}#fff{% else %}#6b7280{% endif %};text-decoration:none;">
       {{ lbl }}
     </a>
     {% endfor %}
@@ -88,7 +88,7 @@
 {% if items %}
 <div style="display:flex;flex-direction:column;gap:10px;" id="anomaly-list">
   {% for item in items %}
-  {% set prob_color = '#dc2626' if item.probability >= 80 else ('#d97706' if item.probability >= 60 else '#875a7b') %}
+  {% set prob_color = '#dc2626' if item.probability >= 80 else ('#d97706' if item.probability >= 60 else 'var(--p)') %}
   {% set circ_r = 22 %}
   {% set circ_c = 28 %}
   {% set circ_dash = (item.probability / 100 * 3.14159 * 2 * circ_r)|round(1) %}

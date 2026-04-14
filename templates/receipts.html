@@ -1,0 +1,711 @@
+{% extends "base.html" %}
+{% block title %}Receipt Scanner{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Receipt Scanner</h1>
+  <p>Upload WhatsApp receipt photos — AI extracts line items and inserts sale orders into Odoo</p>
+</div>
+
+<style>
+  /* ── Drop zone ── */
+  #drop-zone {
+    border: 2px dashed rgba(135,90,123,.35);
+    border-radius: 16px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    background: rgba(255,255,255,.55);
+    backdrop-filter: blur(10px);
+  }
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--p);
+    background: var(--p-a06);
+  }
+  #drop-zone .dz-icon {
+    width: 56px; height: 56px;
+    background: var(--pbg);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px;
+  }
+
+  /* ── Receipt card ── */
+  .r-card {
+    background: rgba(255,255,255,.82);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.65);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  .r-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(229,231,235,.8);
+    background: rgba(248,248,252,.7);
+  }
+  .r-card-body { display: flex; gap: 0; }
+  .r-table-wrap { flex: 1 1 0; min-width: 0; padding: 12px 16px; }
+  .r-img-panel {
+    width: 45%; flex-shrink: 0;
+    border-left: 1px solid rgba(229,231,235,.6);
+    padding: 12px;
+    background: rgba(248,248,250,.5);
+    display: flex; align-items: flex-start; justify-content: center;
+  }
+  .r-img-panel img {
+    width: 100%; border-radius: 10px;
+    object-fit: contain; max-height: 800px;
+    cursor: zoom-in; border: 1px solid rgba(229,231,235,.6);
+    transition: opacity .15s;
+  }
+  .r-img-panel img:hover { opacity: .9; }
+
+  /* ── Lightbox ── */
+  #lightbox {
+    display: none; position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,.88); backdrop-filter: blur(6px);
+    align-items: center; justify-content: center;
+    cursor: zoom-out;
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img {
+    max-width: 92vw; max-height: 92vh;
+    border-radius: 10px; object-fit: contain;
+    box-shadow: 0 24px 80px rgba(0,0,0,.5);
+    cursor: default;
+  }
+  #lightbox-close {
+    position: absolute; top: 18px; right: 22px;
+    background: rgba(255,255,255,.12); border: none; color: #fff;
+    width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s; font-size: 18px;
+  }
+  #lightbox-close:hover { background: rgba(255,255,255,.22); }
+
+  /* ── Item table ── */
+  .r-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .r-tbl th { padding: 7px 10px; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #9ca3af; border-bottom: 1px solid rgba(229,231,235,.8); text-align: left; }
+  .r-tbl th.r { text-align: right; }
+  .r-tbl td { padding: 8px 10px; border-bottom: 1px solid rgba(243,244,246,.9); color: #374151; vertical-align: middle; }
+  .r-tbl td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .r-tbl tr:last-child td { border-bottom: none; }
+  .r-tbl tbody tr.excluded { opacity: .35; }
+
+  /* ── Confidence badges ── */
+  .badge-high   { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 700; border: 1px solid rgba(6,95,70,.15); }
+  .badge-medium { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 700; border: 1px solid rgba(146,64,14,.15); }
+  .badge-low    { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 700; border: 1px solid rgba(153,27,27,.15); }
+
+  /* ── Product search dropdown ── */
+  .prod-cell { position: relative; }
+  .prod-btn {
+    background: none; border: none; cursor: pointer; text-align: left;
+    padding: 4px 6px; border-radius: 6px; transition: background .12s;
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    font-size: 13px;
+  }
+  .prod-btn:hover { background: var(--p-a06); }
+  .prod-btn .edit-icon { color: #d1d5db; flex-shrink: 0; }
+  .prod-btn:hover .edit-icon { color: #9ca3af; }
+  .prod-dropdown {
+    position: absolute; z-index: 100; left: 0; top: 100%; margin-top: 4px;
+    width: 320px; background: #fff;
+    border: 1px solid rgba(229,231,235,.9); border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.14);
+    overflow: hidden;
+  }
+  .prod-search-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid #f3f4f6;
+  }
+  .prod-search-input {
+    flex: 1; border: none; outline: none; font-size: 13px; color: #1f2937;
+    background: transparent;
+  }
+  .prod-list { max-height: 220px; overflow-y: auto; }
+  .prod-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f9fafb;
+    transition: background .1s; font-size: 12.5px; gap: 8px;
+  }
+  .prod-item:hover { background: var(--p-a06); }
+  .prod-item.active { background: var(--pbg); }
+  .prod-item:last-child { border-bottom: none; }
+
+  /* ── Status messages ── */
+  .r-success { background: #d1fae5; color: #065f46; border: 1px solid rgba(6,95,70,.2); }
+  .r-error   { background: #fee2e2; color: #991b1b; border: 1px solid rgba(153,27,27,.2); }
+  .r-warn    { background: #fef3c7; color: #92400e; border: 1px solid rgba(146,64,14,.2); }
+
+  /* ── Spinner ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin .8s linear infinite; display: inline-block; }
+
+  /* ── Insert btn ── */
+  .insert-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 8px; border: none;
+    background: linear-gradient(135deg, var(--p), var(--pd));
+    color: #fff; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 2px 8px var(--p-a30); transition: opacity .15s;
+  }
+  .insert-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .insert-btn:hover:not(:disabled) { opacity: .88; }
+
+  /* ── Mode toggle ── */
+  .mode-toggle { display:flex; background:rgba(243,244,246,.8); border-radius:8px; padding:3px; gap:2px; border:1px solid rgba(229,231,235,.6); }
+  .mode-btn { padding:5px 14px; border-radius:6px; font-size:12.5px; font-weight:600; border:none; background:none; color:#6b7280; cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .mode-btn.active { background:#fff; color:var(--p); box-shadow:0 1px 4px rgba(0,0,0,.1); }
+</style>
+
+<!-- Header row: title + mode toggle -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+  <div>
+    <div style="font-size:13px;color:#9ca3af;" id="mode-desc">Hybrid: Python matches common items, AI only handles ambiguous ones</div>
+  </div>
+  <div class="mode-toggle">
+    <button class="mode-btn" id="mode-btn-gemini" onclick="setMode('gemini_only')">Gemini Only</button>
+    <button class="mode-btn active" id="mode-btn-hybrid" onclick="setMode('hybrid')">⚡ Hybrid</button>
+  </div>
+</div>
+
+<!-- Drop zone -->
+<div id="drop-zone" onclick="document.getElementById('file-input').click()">
+  <input id="file-input" type="file" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
+  <div class="dz-icon">
+    <svg width="24" height="24" fill="none" stroke="var(--p)" stroke-width="2" viewBox="0 0 24 24">
+      <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+    </svg>
+  </div>
+  <div style="font-size:15px;font-weight:700;color:#374151;">Drop receipt photos here</div>
+  <div style="font-size:13px;color:#9ca3af;margin-top:4px;">or click to browse · multiple files OK</div>
+  <div id="scan-status" style="margin-top:14px;display:none;">
+    <span class="spin" style="color:var(--p);">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke-opacity=".25"/>
+        <path d="M21 12a9 9 0 0 0-9-9"/>
+      </svg>
+    </span>
+    <span style="margin-left:8px;font-size:13.5px;font-weight:600;color:var(--p);">Reading receipts with AI…</span>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="receipt" onclick="event.stopPropagation()">
+</div>
+
+<!-- Controls row -->
+<div id="controls-row" style="display:none;margin:18px 0 4px;display:flex;align-items:center;justify-content:space-between;">
+  <span id="receipt-count" style="font-size:13px;color:#9ca3af;font-weight:500;"></span>
+  <button onclick="clearAll()" style="display:flex;align-items:center;gap:5px;background:none;border:none;color:#9ca3af;font-size:12.5px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:color .15s;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#9ca3af'">
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.36"/></svg>
+    Clear all
+  </button>
+</div>
+
+<!-- Results container -->
+<div id="results"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+let catalog = [];
+let results = [];  // {imageUrl, parsed, status:'idle'|'inserting'|'done'|'error', msg, selectedItems}
+
+// ── Scan mode ─────────────────────────────────────────────────
+let scanMode = localStorage.getItem('pw-scan-mode') || 'hybrid';
+
+function setMode(m) {
+  scanMode = m;
+  localStorage.setItem('pw-scan-mode', m);
+  document.getElementById('mode-btn-gemini').classList.toggle('active', m === 'gemini_only');
+  document.getElementById('mode-btn-hybrid').classList.toggle('active', m === 'hybrid');
+  document.getElementById('mode-desc').textContent = m === 'hybrid'
+    ? 'Hybrid: Python matches common items, AI only handles ambiguous ones'
+    : 'Gemini Only: AI reads and matches everything in one call';
+}
+setMode(scanMode); // init from localStorage
+
+// ── Load persisted receipts on page load ──────────────────────
+loadFromStorage();
+
+// ── Load catalog ───────────────────────────────────────────────
+fetch('/api/receipts/products')
+  .then(r => r.json())
+  .then(d => { catalog = parseCatalog(d.content || ''); })
+  .catch(() => {});
+
+function parseCatalog(md) {
+  const out = [];
+  for (const line of md.split('\n')) {
+    if (!line.startsWith('|') || line.includes('variant_id') || line.startsWith('| ---')) continue;
+    const cols = line.split('|').map(c => c.trim()).filter(Boolean);
+    if (cols.length < 5) continue;
+    const id = parseInt(cols[0]);
+    if (isNaN(id)) continue;
+    out.push({ variant_id: id, name: cols[1], code: cols[2] === '—' ? null : cols[2], price: parseFloat(cols[3]) || 0, aliases: cols[4] || '' });
+  }
+  return out;
+}
+
+// ── Drag & Drop ────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); handleFiles(e.dataTransfer.files); });
+
+function handleFiles(files) {
+  const imgs = Array.from(files).filter(f => f.type.startsWith('image/'));
+  if (!imgs.length) return;
+  scanFiles(imgs);
+}
+
+// ── Scan ───────────────────────────────────────────────────────
+async function scanFiles(files) {
+  const status = document.getElementById('scan-status');
+  status.style.display = 'block';
+
+  for (const file of files) {
+    const imageUrl = URL.createObjectURL(file);
+    const b64 = await fileToBase64(file);
+    try {
+      const resp = await fetch('/api/receipts/scan', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ image: b64, mimeType: file.type, mode: scanMode })
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const data = await resp.json();
+
+      if (data.not_a_receipt) {
+        addResult({ imageUrl, parsed: data, status:'idle', msg:'', selectedItems: new Set() });
+      } else {
+        const list = data.receipts || [data];
+        const stats = data.stats || null;
+        for (const parsed of list) {
+          const sel = new Set((parsed.items || []).map((_, i) => i));
+          addResult({ imageUrl, parsed, status:'idle', msg:'', selectedItems: sel, stats });
+        }
+      }
+    } catch (err) {
+      addResult({ imageUrl, parsed: { items:[], not_scan_error:true }, status:'error', msg: err.message, selectedItems: new Set() });
+    }
+  }
+
+  status.style.display = 'none';
+  updateControls();
+  render();
+}
+
+function fileToBase64(file) {
+  return new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result.split(',')[1]);
+    r.readAsDataURL(file);
+  });
+}
+
+// ── Lightbox ───────────────────────────────────────────────────
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── localStorage persistence ───────────────────────────────────
+const LS_KEY = 'pw-receipts-v1';
+
+function saveToStorage() {
+  try {
+    // Store parsed data + status; imageUrl is a blob URL (session-only) so we keep it but it may be stale
+    const toSave = results.map(r => ({
+      imageUrl: r.imageUrl,
+      parsed: r.parsed,
+      status: r.status,
+      msg: r.msg,
+      selectedItems: Array.from(r.selectedItems || [])
+    }));
+    localStorage.setItem(LS_KEY, JSON.stringify(toSave));
+  } catch(e) {}
+}
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    results = saved.map(r => ({
+      ...r,
+      selectedItems: new Set(r.selectedItems || [])
+    }));
+    render(); updateControls();
+  } catch(e) {}
+}
+
+function addResult(r) { results.unshift(r); saveToStorage(); }
+
+function clearAll() { results = []; localStorage.removeItem(LS_KEY); render(); updateControls(); }
+
+function updateControls() {
+  const row = document.getElementById('controls-row');
+  const cnt = document.getElementById('receipt-count');
+  if (results.length === 0) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  cnt.textContent = results.length + ' receipt' + (results.length !== 1 ? 's' : '') + ' scanned';
+}
+
+// ── Insert to Odoo ─────────────────────────────────────────────
+async function insertOdoo(idx) {
+  const r = results[idx];
+  r.status = 'inserting'; render();
+  const itemsToInsert = (r.parsed.items || []).filter((_, i) => r.selectedItems.has(i));
+  try {
+    const resp = await fetch('/api/receipts/insert-odoo', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        receipt_no: r.parsed.receipt_no,
+        date: r.parsed.date,
+        customer: r.parsed.customer,
+        items: itemsToInsert
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.details || data.error);
+    r.status = 'done'; r.msg = 'Created ' + data.order_name;
+  } catch (err) {
+    r.status = 'error'; r.msg = err.message;
+  }
+  saveToStorage(); render();
+}
+
+function toggleItem(idx, i) {
+  const r = results[idx];
+  if (r.selectedItems.has(i)) r.selectedItems.delete(i);
+  else r.selectedItems.add(i);
+  render();
+}
+
+function removeResult(idx) {
+  results.splice(idx, 1);
+  saveToStorage(); render(); updateControls();
+}
+
+function updateProduct(resultIdx, itemIdx, prod) {
+  const item = results[resultIdx].parsed.items[itemIdx];
+  item.matched_product = prod ? { variant_id: prod.variant_id, name: prod.name, code: prod.code, catalog_price: prod.price } : null;
+  if (prod) {
+    item.confidence = 'HIGH';
+    item.confidence_reason = 'Manually selected';
+    if (!item.unit_price) item.line_total = prod.price * item.qty;
+  }
+  render();
+}
+
+// ── Product search state ───────────────────────────────────────
+let openDropdown = null;  // {resultIdx, itemIdx}
+let dropdownQuery = '';
+
+function openProdSearch(resultIdx, itemIdx) {
+  openDropdown = { resultIdx, itemIdx };
+  dropdownQuery = '';
+  render();
+  setTimeout(() => {
+    const inp = document.getElementById('prod-search-input');
+    if (inp) inp.focus();
+  }, 30);
+}
+
+function closeProdSearch() {
+  openDropdown = null;
+  render();
+}
+
+function handleSearchInput(e) {
+  dropdownQuery = e.target.value;
+  renderDropdown();
+}
+
+function selectProduct(prod) {
+  if (!openDropdown) return;
+  updateProduct(openDropdown.resultIdx, openDropdown.itemIdx, prod);
+  openDropdown = null;
+  dropdownQuery = '';
+}
+
+function getFilteredProducts() {
+  if (!dropdownQuery.trim()) return catalog.slice(0, 20);
+  const q = dropdownQuery.toLowerCase();
+  return catalog.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    (p.code && p.code.toLowerCase().includes(q)) ||
+    p.aliases.toLowerCase().includes(q)
+  ).slice(0, 20);
+}
+
+// ── Render ─────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function confBadge(level, reason) {
+  const cls = level === 'HIGH' ? 'badge-high' : level === 'MEDIUM' ? 'badge-medium' : 'badge-low';
+  return `<span class="${cls}" title="${esc(reason)}">${level === 'MEDIUM' ? 'MED' : level}</span>`;
+}
+
+function render() {
+  const container = document.getElementById('results');
+  if (!results.length) { container.innerHTML = ''; return; }
+  container.innerHTML = results.map((r, idx) => renderCard(r, idx)).join('');
+
+  // Bind events
+  container.querySelectorAll('[data-toggle-item]').forEach(el => {
+    const [ri, ii] = el.dataset.toggleItem.split(',').map(Number);
+    el.addEventListener('change', () => toggleItem(ri, ii));
+  });
+  container.querySelectorAll('[data-open-prod]').forEach(el => {
+    const [ri, ii] = el.dataset.openProd.split(',').map(Number);
+    el.addEventListener('click', e => { e.stopPropagation(); openProdSearch(ri, ii); });
+  });
+  container.querySelectorAll('[data-insert]').forEach(el => {
+    el.addEventListener('click', () => insertOdoo(Number(el.dataset.insert)));
+  });
+  container.querySelectorAll('[data-remove]').forEach(el => {
+    el.addEventListener('click', () => removeResult(Number(el.dataset.remove)));
+  });
+
+  if (openDropdown) {
+    const inp = document.getElementById('prod-search-input');
+    if (inp) {
+      inp.value = dropdownQuery;
+      inp.addEventListener('input', handleSearchInput);
+    }
+    container.querySelectorAll('[data-pick-prod]').forEach(el => {
+      const idx = parseInt(el.dataset.pickProd);
+      el.addEventListener('click', e => { e.stopPropagation(); selectProduct(getFilteredProducts()[idx]); });
+    });
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('mousedown', function handler(e) {
+        const dd = document.getElementById('prod-dropdown');
+        if (dd && !dd.contains(e.target)) { closeProdSearch(); document.removeEventListener('mousedown', handler); }
+      });
+    }, 50);
+  }
+
+  updateControls();
+}
+
+function renderDropdown() {
+  const dd = document.getElementById('prod-dropdown');
+  if (!dd) return;
+  const items = getFilteredProducts();
+  const cur = openDropdown ? (results[openDropdown.resultIdx].parsed.items[openDropdown.itemIdx].matched_product || {}) : {};
+  dd.querySelector('.prod-list').innerHTML = items.length === 0
+    ? `<div style="padding:12px;text-align:center;font-size:12.5px;color:#9ca3af;">No products found</div>`
+    : items.map((p, i) => `
+      <div class="prod-item ${cur.variant_id === p.variant_id ? 'active' : ''}" data-pick-prod="${i}">
+        <div style="min-width:0;">
+          <span style="font-weight:600;color:#1f2937;">${esc(p.name)}</span>
+          ${p.code ? `<span style="margin-left:5px;font-size:11.5px;color:#9ca3af;">[${esc(p.code)}]</span>` : ''}
+          ${p.aliases ? `<div style="font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;">${esc(p.aliases)}</div>` : ''}
+        </div>
+        <span style="font-size:11.5px;color:#6b7280;flex-shrink:0;">Shs ${p.price}</span>
+      </div>`).join('');
+  dd.querySelectorAll('[data-pick-prod]').forEach(el => {
+    const i = parseInt(el.dataset.pickProd);
+    el.addEventListener('click', e => { e.stopPropagation(); selectProduct(items[i]); });
+  });
+}
+
+function renderCard(r, idx) {
+  const p = r.parsed;
+
+  // Not a receipt
+  if (p.not_a_receipt) {
+    return `<div class="r-card" style="border-color:rgba(252,211,77,.4);">
+      <div class="r-card-header" style="background:rgba(254,243,199,.5);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;background:#fef3c7;border-radius:9px;display:flex;align-items:center;justify-content:center;">
+            <svg width="16" height="16" fill="none" stroke="#d97706" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div>
+            <div style="font-weight:700;font-size:13.5px;color:#92400e;">Not a receipt</div>
+            <div style="font-size:12px;color:#b45309;">${esc(p.reason || 'This image does not appear to be a cash sale receipt')}</div>
+          </div>
+        </div>
+        <button data-remove="${idx}" style="background:none;border:none;cursor:pointer;color:#fbbf24;padding:4px;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div style="padding:10px 16px;">
+        <img src="${esc(r.imageUrl)}" style="max-height:140px;border-radius:8px;object-fit:contain;border:1px solid rgba(229,231,235,.6);">
+      </div>
+    </div>`;
+  }
+
+  // Scan error
+  if (r.status === 'error' && (!p.items || p.items.length === 0)) {
+    return `<div class="r-card" style="border-color:rgba(252,165,165,.4);">
+      <div class="r-card-header" style="background:rgba(254,226,226,.4);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-weight:700;font-size:13.5px;color:#991b1b;">Scan failed</div>
+          <div style="font-size:12px;color:#b91c1c;">${esc(r.msg)}</div>
+        </div>
+        <button data-remove="${idx}" style="background:none;border:none;cursor:pointer;color:#fca5a5;padding:4px;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>`;
+  }
+
+  const items = p.items || [];
+  const totalCalc = items.reduce((s, it) => s + (it.line_total || 0), 0);
+  const hasUnmatched = items.some(it => !it.matched_product);
+  const selCount = (r.selectedItems || new Set()).size;
+
+  let actionHtml = '';
+  if (r.status === 'done') {
+    actionHtml = `<div style="display:flex;align-items:center;gap:5px;color:#065f46;font-size:12.5px;font-weight:600;">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      ${esc(r.msg)}
+    </div>`;
+  } else if (r.status === 'error') {
+    actionHtml = `<div style="display:flex;align-items:center;gap:5px;color:#991b1b;font-size:12.5px;">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      ${esc(r.msg)}
+    </div>`;
+  } else {
+    const busy = r.status === 'inserting';
+    actionHtml = `<button class="insert-btn" data-insert="${idx}" ${busy || selCount === 0 ? 'disabled' : ''}>
+      ${busy
+        ? `<span class="spin"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke-opacity=".3"/><path d="M21 12a9 9 0 0 0-9-9"/></svg></span> Inserting…`
+        : `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+           Insert to Odoo (${selCount})`
+      }
+    </button>`;
+  }
+
+  const itemRows = items.map((it, i) => {
+    const sel = (r.selectedItems || new Set()).has(i);
+    const mp = it.matched_product;
+    const isOpen = openDropdown && openDropdown.resultIdx === idx && openDropdown.itemIdx === i;
+    const prodCell = `<div class="prod-cell">
+      <button class="prod-btn" data-open-prod="${idx},${i}">
+        ${mp
+          ? `<div style="flex:1;min-width:0;">
+               <span style="font-weight:600;color:#1f2937;font-size:12.5px;">${esc(mp.name)}</span>
+               ${mp.code ? `<span style="font-size:11px;color:#9ca3af;margin-left:4px;">[${esc(mp.code)}]</span>` : ''}
+             </div>`
+          : `<span style="color:#f87171;font-style:italic;font-size:12.5px;flex:1;">no match — click to search</span>`
+        }
+        <svg class="edit-icon" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      ${isOpen ? `<div class="prod-dropdown" id="prod-dropdown">
+        <div class="prod-search-row">
+          <svg width="13" height="13" fill="none" stroke="#9ca3af" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="prod-search-input" class="prod-search-input" placeholder="Search name, code or alias…">
+          <button onclick="closeProdSearch()" style="background:none;border:none;cursor:pointer;color:#d1d5db;padding:2px;" onmouseover="this.style.color='#6b7280'" onmouseout="this.style.color='#d1d5db'">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="prod-list">${renderDropdownItems()}</div>
+      </div>` : ''}
+    </div>`;
+
+    return `<tr class="${sel ? '' : 'excluded'}">
+      <td><input type="checkbox" ${sel ? 'checked' : ''} data-toggle-item="${idx},${i}" style="width:13px;height:13px;accent-color:var(--p);cursor:pointer;"></td>
+      <td style="font-family:monospace;font-size:12px;color:#9ca3af;">${esc(it.raw_text)}</td>
+      <td>${prodCell}</td>
+      <td class="r">${it.qty ?? 1}</td>
+      <td class="r">${it.line_total != null ? Number(it.line_total).toLocaleString('en-KE') : '—'}</td>
+      <td style="text-align:center;">${confBadge(it.confidence || 'LOW', it.confidence_reason || '')}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="r-card">
+    <div class="r-card-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;background:var(--pbg);border-radius:9px;display:flex;align-items:center;justify-content:center;">
+          <svg width="15" height="15" fill="none" stroke="var(--p)" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:13.5px;color:#1f2937;">Receipt #${esc(p.receipt_no || '—')}</div>
+          <div style="font-size:12px;color:#9ca3af;">${esc(p.date || 'unknown date')} · ${esc(p.customer || 'WalkIn')}
+            ${r.stats ? `<span style="margin-left:8px;background:var(--pbg);color:var(--p);border-radius:10px;padding:1px 7px;font-size:10.5px;font-weight:700;">⚡ ${r.stats.python_resolved}/${r.stats.total_items} local · ${r.stats.gemini_resolved} AI</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        ${actionHtml}
+        <button data-remove="${idx}" style="background:none;border:none;cursor:pointer;color:#d1d5db;padding:4px;border-radius:5px;transition:color .12s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#d1d5db'">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="r-card-body">
+      <div class="r-table-wrap">
+        <table class="r-tbl">
+          <thead>
+            <tr>
+              <th style="width:20px;"></th>
+              <th>Written</th>
+              <th>Matched Product</th>
+              <th class="r" style="width:40px;">Qty</th>
+              <th class="r" style="width:80px;">Total</th>
+              <th style="text-align:center;width:60px;">Conf.</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+          <tfoot>
+            <tr style="border-top:1.5px solid rgba(229,231,235,.8);">
+              <td colspan="4" style="padding:8px 10px;font-size:12.5px;color:#9ca3af;">
+                Calculated: <span style="font-weight:600;color:#374151;">${Number(totalCalc).toLocaleString('en-KE')}</span>
+                ${p.total_written != null && p.total_written !== totalCalc
+                  ? `<span style="margin-left:8px;color:#d97706;">(receipt: ${Number(p.total_written).toLocaleString('en-KE')})</span>`
+                  : ''}
+              </td>
+              <td style="padding:8px 10px;text-align:right;font-weight:700;color:#1f2937;">${Number(p.total_written || totalCalc).toLocaleString('en-KE')}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+        ${hasUnmatched && r.status === 'idle' ? `
+          <div style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:12px;color:#92400e;background:#fef3c7;padding:8px 12px;border-radius:8px;border:1px solid rgba(217,119,6,.15);">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Click any unmatched item to search and select the correct product
+          </div>` : ''}
+        ${p.notes ? `<div style="margin-top:8px;font-size:11.5px;color:#9ca3af;font-style:italic;">${esc(p.notes)}</div>` : ''}
+      </div>
+      <div class="r-img-panel">
+        <img src="${esc(r.imageUrl)}" alt="receipt" onclick="openLightbox(this.src)" title="Click to enlarge">
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderDropdownItems() {
+  const items = getFilteredProducts();
+  const cur = openDropdown ? (results[openDropdown.resultIdx].parsed.items[openDropdown.itemIdx].matched_product || {}) : {};
+  if (!items.length) return `<div style="padding:12px;text-align:center;font-size:12.5px;color:#9ca3af;">No products found</div>`;
+  return items.map((p, i) => `
+    <div class="prod-item ${cur.variant_id === p.variant_id ? 'active' : ''}" data-pick-prod="${i}">
+      <div style="min-width:0;">
+        <span style="font-weight:600;color:#1f2937;">${esc(p.name)}</span>
+        ${p.code ? `<span style="margin-left:5px;font-size:11.5px;color:#9ca3af;">[${esc(p.code)}]</span>` : ''}
+        ${p.aliases ? `<div style="font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;">${esc(p.aliases)}</div>` : ''}
+      </div>
+      <span style="font-size:11.5px;color:#6b7280;flex-shrink:0;">Shs ${p.price}</span>
+    </div>`).join('');
+}
+</script>
+{% endblock %}

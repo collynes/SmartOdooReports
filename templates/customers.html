@@ -4,8 +4,8 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Top Customers</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Ranked by total revenue in the selected period</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Top Customers</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Ranked by total revenue in the selected period</p>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     {% set explain_page = 'customers' %}{% include '_explain.html' %}
@@ -102,7 +102,7 @@ function setView(v) {
   if (v === 'chart' && !chartsBuilt) buildCharts();
 }
 
-const PALETTE = ['#875a7b','#a56a9b','#714b67','#c095b8','#5c3d53','#d9bfd3','#3d2645','#ede0ea'];
+const PALETTE = [THEME.p(),THEME.pd(),'#17becf','#ff7f50','#2e8b57','#4682b4','#ffa500','#9370db'];
 
 function buildCharts() {
   chartsBuilt = true;

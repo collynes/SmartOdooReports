@@ -4,8 +4,8 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Sleeping Giants</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Former top products now showing significant revenue decline — worth re-activating</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Sleeping Giants</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Former top products now showing significant revenue decline — worth re-activating</p>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     {% set explain_page = 'sleeping' %}{% include '_explain.html' %}
@@ -94,7 +94,7 @@ function buildCharts() {
     data: {
       labels,
       datasets: [
-        { label:'Peak Revenue', data:sleepData.map(r=>parseFloat(r.peak_rev)), backgroundColor:'rgba(135,90,123,.35)', borderColor:'#875a7b', borderWidth:1, borderRadius:3 },
+        { label:'Peak Revenue', data:sleepData.map(r=>parseFloat(r.peak_rev)), backgroundColor:'THEME.alpha(.35)', borderColor:THEME.p(), borderWidth:1, borderRadius:3 },
         { label:'Recent Revenue', data:sleepData.map(r=>parseFloat(r.recent_rev)), backgroundColor:'rgba(220,38,38,.65)', borderColor:'#dc2626', borderWidth:1, borderRadius:3 },
       ]
     },

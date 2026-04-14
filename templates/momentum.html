@@ -4,8 +4,8 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Momentum</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Products where both revenue and quantity grew in the selected period vs the equivalent prior period</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Momentum</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Products where both revenue and quantity grew in the selected period vs the equivalent prior period</p>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     {% set explain_page = 'momentum' %}{% include '_explain.html' %}
@@ -90,7 +90,7 @@ function buildCharts() {
     data: {
       labels,
       datasets: [
-        { label:'Prior Period', data:momData.map(r=>parseFloat(r.prev_rev)), backgroundColor:'rgba(135,90,123,.35)', borderColor:'#875a7b', borderWidth:1, borderRadius:3 },
+        { label:'Prior Period', data:momData.map(r=>parseFloat(r.prev_rev)), backgroundColor:'THEME.alpha(.35)', borderColor:THEME.p(), borderWidth:1, borderRadius:3 },
         { label:'Current Period', data:momData.map(r=>parseFloat(r.curr_rev)), backgroundColor:'rgba(5,150,105,.7)', borderColor:'#059669', borderWidth:1, borderRadius:3 },
       ]
     },

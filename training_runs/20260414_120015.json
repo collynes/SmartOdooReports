@@ -1,0 +1,27 @@
+{
+  "session_id": "20260414_120015",
+  "folder": "/Users/collinsk/Documents/com.collins/com.reports/trainingdata/6M",
+  "started_at": "2026-04-14T12:00:15.863888",
+  "finished_at": "2026-04-14T12:08:12.963211",
+  "stopped": false,
+  "total_images": 87,
+  "processed": 87,
+  "skipped": 11,
+  "summary": {
+    "receipts_scanned": 86,
+    "not_receipts": 0,
+    "errors": 1,
+    "total_items": 938,
+    "correct": 397,
+    "accuracy": 42.3,
+    "alias_suggestions": 193
+  },
+  "counters": {
+    "scanned": 75,
+    "receipt_no": 106,
+    "date_total": 1,
+    "not_found": 23,
+    "errors": 1,
+    "not_receipt": 0
+  }
+}

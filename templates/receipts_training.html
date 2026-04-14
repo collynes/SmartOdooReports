@@ -1,0 +1,1182 @@
+{% extends "base.html" %}
+{% block title %}Scanner Training{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Scanner Training</h1>
+  <p>Point at a folder of receipt photos — AI extracts items, compares to Odoo ground truth, and learns new aliases automatically</p>
+</div>
+
+<style>
+  .t-card { background:rgba(255,255,255,.82); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.65); border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.06); padding:20px 24px; margin-bottom:18px; }
+
+  /* progress bar */
+  .prog-track { height:7px; background:rgba(229,231,235,.6); border-radius:10px; overflow:hidden; margin:10px 0 4px; }
+  .prog-fill  { height:100%; background:linear-gradient(90deg,var(--p),var(--pd)); border-radius:10px; transition:width .5s ease; }
+
+  /* live layout */
+  .live-grid { display:grid; grid-template-columns:1fr 280px; gap:18px; align-items:start; }
+  @media(max-width:700px){ .live-grid { grid-template-columns:1fr; } .live-img-panel { display:none; } }
+
+  /* current image panel */
+  .live-img-panel { border-radius:10px; overflow:hidden; background:#f3f4f6; display:flex; align-items:center; justify-content:center; min-height:160px; max-height:380px; border:1px solid rgba(229,231,235,.7); }
+  .live-img-panel img { width:100%; height:auto; display:block; object-fit:contain; border-radius:10px; }
+  .live-img-placeholder { display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:28px;color:#d1d5db; }
+
+  /* counters row */
+  .counter-row { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 8px; }
+  .ctr-pill { display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; }
+  .ctr-green  { background:#d1fae5; color:#065f46; }
+  .ctr-blue   { background:#dbeafe; color:#1e40af; }
+  .ctr-yellow { background:#fef3c7; color:#92400e; }
+  .ctr-red    { background:#fee2e2; color:#991b1b; }
+  .ctr-gray   { background:#f3f4f6; color:#6b7280; }
+
+  /* live feed */
+  .feed-list { display:flex; flex-direction:column; gap:3px; margin-top:10px; }
+  .feed-row  { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:7px; font-size:12px; background:rgba(249,250,251,.7); border:1px solid rgba(243,244,246,.8); animation:fadeSlide .3s ease; }
+  @keyframes fadeSlide { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+  .feed-file { font-family:monospace; font-size:11.5px; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:220px; flex-shrink:0; }
+  .feed-status { flex:1; font-size:11.5px; color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* result rows */
+  .res-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; margin-bottom:4px; font-size:13px; cursor:pointer; transition:background .12s; }
+  .res-row:hover { background:rgba(139,92,246,.06); }
+  .res-row .file-name { flex:1; font-weight:600; color:#374151; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .acc-pill  { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; flex-shrink:0; }
+  .acc-high  { background:#d1fae5; color:#065f46; }
+  .acc-mid   { background:#fef3c7; color:#92400e; }
+  .acc-low   { background:#fee2e2; color:#991b1b; }
+  .acc-none  { background:#f3f4f6; color:#6b7280; }
+
+  /* comparison table */
+  .cmp-tbl { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
+  .cmp-tbl th { padding:6px 10px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#9ca3af; border-bottom:1px solid rgba(229,231,235,.8); text-align:left; }
+  .cmp-tbl td { padding:7px 10px; border-bottom:1px solid rgba(243,244,246,.8); vertical-align:middle; }
+  .cmp-tbl tr:last-child td { border-bottom:none; }
+  .cmp-correct td { background:rgba(209,250,229,.25); }
+  .cmp-wrong   td { background:rgba(254,226,226,.25); }
+  .cmp-no-odoo td { background:rgba(254,243,199,.15); }
+  .cmp-missed  td { background:rgba(219,234,254,.2); }
+
+  /* alias suggestions */
+  .alias-row  { display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; border:1px solid rgba(229,231,235,.6); margin-bottom:6px; background:rgba(255,255,255,.6); font-size:13px; }
+  .alias-raw  { font-family:monospace; font-size:12.5px; color:#374151; background:#f3f4f6; padding:2px 8px; border-radius:5px; }
+  .alias-arrow { color:#9ca3af; flex-shrink:0; }
+  .alias-prod { font-weight:700; color:#1f2937; flex:1; }
+  .alias-count { font-size:11px; color:#9ca3af; flex-shrink:0; }
+  .alias-btn  { padding:4px 12px; border-radius:6px; font-size:12px; font-weight:600; border:none; cursor:pointer; transition:all .15s; flex-shrink:0; }
+  .alias-add  { background:linear-gradient(135deg,var(--p),var(--pd)); color:#fff; box-shadow:0 1px 5px rgba(0,0,0,.15); }
+  .alias-add:hover { opacity:.85; }
+  .alias-skip { background:#f3f4f6; color:#6b7280; }
+  .alias-skip:hover { background:#e5e7eb; }
+  .alias-done { background:#d1fae5; color:#065f46; cursor:default; }
+
+  /* stat pills */
+  .stat-box { text-align:center; padding:14px 10px; border-radius:10px; background:rgba(255,255,255,.6); border:1px solid rgba(229,231,235,.5); }
+  .stat-num { font-size:22px; font-weight:800; color:var(--p); }
+  .stat-lbl { font-size:11px; color:#9ca3af; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .spin { animation:spin .8s linear infinite; display:inline-block; }
+
+  /* Gemini review */
+  .g-tab { padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; border:1px solid rgba(229,231,235,.8); background:rgba(255,255,255,.6); color:#6b7280; cursor:pointer; transition:all .15s; }
+  .g-tab-active { background:linear-gradient(135deg,#8b5cf6,#ec4899); color:#fff; border-color:transparent; box-shadow:0 1px 5px rgba(139,92,246,.3); }
+  .g-alias-row { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:8px 12px; border-radius:8px; border:1px solid rgba(229,231,235,.6); margin-bottom:5px; background:rgba(255,255,255,.6); font-size:13px; transition:opacity .2s; }
+  .g-alias-row.actioned { opacity:.4; }
+
+  /* Inline correction form */
+  .alias-edit-form { width:100%; margin-top:6px; padding:8px 10px; background:rgba(239,246,255,.7); border-radius:8px; border:1px solid rgba(147,197,253,.4); }
+  .alias-search-input { width:100%; padding:5px 10px; border:1px solid rgba(209,213,219,.8); border-radius:6px; font-size:13px; outline:none; background:#fff; }
+  .alias-search-input:focus { border-color:#8b5cf6; box-shadow:0 0 0 2px rgba(139,92,246,.15); }
+  .alias-search-results { max-height:160px; overflow-y:auto; border:1px solid rgba(209,213,219,.6); border-radius:6px; margin-top:4px; background:#fff; }
+  .alias-result-item { padding:6px 10px; font-size:12.5px; cursor:pointer; border-bottom:1px solid rgba(243,244,246,.8); color:#374151; }
+  .alias-result-item:last-child { border-bottom:none; }
+  .alias-result-item:hover { background:#ede9fe; color:#5b21b6; }
+  .g-conf-badge { font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:8px; flex-shrink:0; }
+  .g-HIGH   { background:#ede9fe; color:#5b21b6; }
+  .g-MEDIUM { background:#fef3c7; color:#92400e; }
+  .g-LOW    { background:#f3f4f6; color:#6b7280; }
+  .g-REJECT { background:#fee2e2; color:#991b1b; }
+
+  /* run history table */
+  .hist-tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .hist-tbl th { padding:6px 10px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#9ca3af; border-bottom:1px solid rgba(229,231,235,.8); text-align:left; }
+  .hist-tbl td { padding:8px 10px; border-bottom:1px solid rgba(243,244,246,.8); vertical-align:middle; }
+  .hist-tbl tr:last-child td { border-bottom:none; }
+  .hist-tbl tr:hover td { background:rgba(139,92,246,.04); }
+  .hist-best td { background:rgba(209,250,229,.18) !important; }
+  .acc-bar-wrap { width:90px; height:6px; background:rgba(229,231,235,.5); border-radius:4px; display:inline-block; vertical-align:middle; }
+  .acc-bar-fill { height:100%; border-radius:4px; transition:width .4s; }
+</style>
+
+<!-- ── Run History card ───────────────────────────────────────── -->
+<div class="t-card" id="history-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div style="font-weight:700;font-size:15px;color:#1f2937;">
+      Run History
+      <span id="hist-count" style="margin-left:6px;font-size:12px;font-weight:600;color:#9ca3af;"></span>
+    </div>
+    <button onclick="loadHistory()" style="padding:4px 12px;border-radius:6px;border:1px solid rgba(229,231,235,.8);background:rgba(255,255,255,.6);color:#6b7280;font-size:12px;font-weight:600;cursor:pointer;">
+      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;vertical-align:-1px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.36"/></svg>
+      Refresh
+    </button>
+  </div>
+  <div id="history-body">
+    <div style="text-align:center;padding:16px;color:#9ca3af;font-size:13px;">Loading history…</div>
+  </div>
+</div>
+<div class="t-card" id="setup-card">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+    <div style="flex:1;min-width:260px;">
+      <label style="font-size:11.5px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px;">Receipt Photos Folder</label>
+      <input id="folder-input" type="text" placeholder="/Users/you/receipts/2025"
+        style="width:100%;padding:9px 12px;border:1.5px solid rgba(229,231,235,.8);border-radius:8px;font-size:13.5px;color:#1f2937;outline:none;background:rgba(255,255,255,.7);font-family:monospace;transition:border-color .15s;"
+        onfocus="this.style.borderColor='var(--p)'" onblur="this.style.borderColor='rgba(229,231,235,.8)'"
+        oninput="onFolderChange(this.value)">
+      <div style="font-size:11.5px;color:#9ca3af;margin-top:4px;">Full path to folder containing .jpg / .png receipt photos</div>
+
+      <!-- Resume / cache row -->
+      <div style="display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#374151;user-select:none;">
+          <input type="checkbox" id="resume-chk" style="accent-color:var(--p);width:14px;height:14px;">
+          Resume — skip already-processed files
+        </label>
+        <span id="cache-info" style="font-size:12px;color:#9ca3af;"></span>
+        <button id="clear-cache-btn" onclick="clearCache()" style="display:none;padding:3px 10px;border-radius:6px;border:1px solid rgba(229,231,235,.8);background:rgba(255,255,255,.6);color:#ef4444;font-size:12px;font-weight:600;cursor:pointer;">
+          Clear cache
+        </button>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+      <button id="start-btn" onclick="startTraining()"
+        style="display:flex;align-items:center;gap:7px;padding:10px 20px;border-radius:9px;border:none;background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.15);transition:opacity .15s;">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Start Training
+      </button>
+      <button onclick="refreshPriceHistory()" id="price-btn"
+        style="display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:7px;border:1px solid rgba(229,231,235,.7);background:rgba(255,255,255,.6);color:#6b7280;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.36"/></svg>
+        Refresh Price History from Odoo
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Live progress card ─────────────────────────────────────── -->
+<div class="t-card" id="progress-card" style="display:none;">
+
+  <!-- Header row -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span id="prog-spinner" class="spin" style="color:var(--p);">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke-opacity=".25"/>
+          <path d="M21 12a9 9 0 0 0-9-9"/>
+        </svg>
+      </span>
+      <span id="prog-title" style="font-weight:700;font-size:14px;color:#1f2937;">Training in progress…</span>
+      <span id="paused-badge" style="display:none;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;">⏸ Paused</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span id="eta-label" style="font-size:12px;color:#9ca3af;"></span>
+      <span id="prog-label" style="font-size:13px;color:#6b7280;font-weight:700;"></span>
+      <!-- Control buttons -->
+      <button id="ctrl-pause" onclick="pauseTraining()"
+        style="display:none;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;border:1px solid rgba(229,231,235,.8);background:rgba(255,255,255,.8);color:#374151;font-size:12px;font-weight:600;cursor:pointer;">
+        <svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        Pause
+      </button>
+      <button id="ctrl-resume" onclick="resumeTraining()"
+        style="display:none;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;border:none;background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.12);">
+        <svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Resume
+      </button>
+      <button id="ctrl-stop" onclick="stopTraining()"
+        style="display:none;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;border:1px solid #fca5a5;background:rgba(254,242,242,.8);color:#dc2626;font-size:12px;font-weight:600;cursor:pointer;">
+        <svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+        Stop
+      </button>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+  <div id="prog-pct" style="font-size:11.5px;color:#9ca3af;margin-bottom:12px;"></div>
+
+  <!-- Two-column: left=stats+feed, right=current image -->
+  <div class="live-grid">
+    <div>
+      <!-- Counter pills -->
+      <div class="counter-row" id="counter-row">
+        <span class="ctr-pill ctr-green">  <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> <span id="ctr-scanned">0</span> scanned</span>
+        <span class="ctr-pill ctr-green">  <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> <span id="ctr-receipt-no">0</span> receipt #</span>
+        <span class="ctr-pill ctr-blue">   <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> <span id="ctr-date-total">0</span> date+total</span>
+        <span class="ctr-pill ctr-yellow"> <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span id="ctr-not-found">0</span> not in Odoo</span>
+        <span class="ctr-pill ctr-red">    <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> <span id="ctr-errors">0</span> errors</span>
+        <span class="ctr-pill ctr-gray" id="ctr-skipped-pill" style="display:none;"> <span id="ctr-skipped">0</span> skipped</span>
+      </div>
+
+      <!-- Current filename -->
+      <div id="prog-current" style="font-size:12px;color:#9ca3af;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;"></div>
+
+      <!-- Live activity feed -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin-bottom:5px;">Recent</div>
+      <div class="feed-list" id="feed-list"></div>
+    </div>
+
+    <!-- Current receipt image -->
+    <div class="live-img-panel" id="img-panel">
+      <div class="live-img-placeholder" id="img-placeholder">
+        <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span style="font-size:11px;">receipt preview</span>
+      </div>
+      <img id="current-img" src="" alt="current receipt" style="display:none;width:100%;height:auto;object-fit:contain;">
+    </div>
+  </div>
+</div>
+
+<!-- ── Summary stats (shown after training completes) ─────────── -->
+<div id="summary-card" style="display:none;" class="t-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+    <div>
+      <div style="font-weight:800;font-size:16px;color:#1f2937;">Training Complete</div>
+      <div id="summary-time" style="font-size:12.5px;color:#9ca3af;"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button id="gemini-summary-btn" onclick="runGeminiReview()"
+        style="display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;background:linear-gradient(135deg,#8b5cf6,#ec4899);color:#fff;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(139,92,246,.3);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2L9.5 9.5H2L8 14l-2.5 7.5L12 17l6.5 4.5L16 14l6-4.5H14.5z" fill="white"/></svg>
+        Analyse with Gemini
+      </button>
+      <button onclick="addAllAliases()" id="add-all-btn"
+        style="display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Add All Alias Suggestions
+      </button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;" id="stat-grid"></div>
+</div>
+
+<!-- ── Alias suggestions ──────────────────────────────────────── -->
+<div id="alias-card" style="display:none;" class="t-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div style="font-weight:700;font-size:15px;color:#1f2937;">
+      Alias Suggestions
+      <span id="alias-count" style="margin-left:6px;font-size:12px;font-weight:600;color:var(--p);background:var(--pbg);padding:2px 8px;border-radius:10px;"></span>
+    </div>
+    <div style="font-size:12px;color:#9ca3af;">Items the scanner got wrong — Odoo has the right answer</div>
+  </div>
+  <div id="alias-list"></div>
+</div>
+
+<!-- ── Gemini AI Review ───────────────────────────────────────── -->
+<div id="gemini-review-card" style="display:none;" class="t-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+    <div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;">
+          <path d="M12 2L9.5 9.5H2L8 14l-2.5 7.5L12 17l6.5 4.5L16 14l6-4.5H14.5z" fill="url(#gstar)" stroke="none"/>
+          <defs><linearGradient id="gstar" x1="2" y1="2" x2="22" y2="22"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs>
+        </svg>
+        <span style="font-weight:700;font-size:15px;color:#1f2937;">AI Alias Review</span>
+        <span id="gemini-review-status-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700;"></span>
+      </div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:3px;">Gemini reviews every mismatch — HIGH &amp; MEDIUM aliases are auto-added to catalog, LOW &amp; REJECT stay here for your call</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button id="gemini-run-btn" onclick="runGeminiReview()"
+        style="display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:1px solid rgba(139,92,246,.4);background:rgba(255,255,255,.8);color:#5b21b6;font-size:13px;font-weight:700;cursor:pointer;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L9.5 9.5H2L8 14l-2.5 7.5L12 17l6.5 4.5L16 14l6-4.5H14.5z" fill="#8b5cf6"/>
+        </svg>
+        Analyse with Gemini
+      </button>
+    </div>
+  </div>
+
+  <!-- Auto-add result banner (shown after review) -->
+  <div id="gemini-auto-banner" style="display:none;background:linear-gradient(135deg,rgba(139,92,246,.08),rgba(236,72,153,.06));border:1px solid rgba(139,92,246,.2);border-radius:10px;padding:10px 16px;margin-bottom:14px;display:none;align-items:center;gap:10px;">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;"><path d="M12 2L9.5 9.5H2L8 14l-2.5 7.5L12 17l6.5 4.5L16 14l6-4.5H14.5z" fill="url(#gstar2)" stroke="none"/><defs><linearGradient id="gstar2" x1="2" y1="2" x2="22" y2="22"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs></svg>
+    <span id="gemini-auto-banner-text" style="font-size:13px;font-weight:600;color:#3b0764;flex:1;"></span>
+    <span style="font-size:12px;color:#6b7280;">Remaining items below need your judgment</span>
+  </div>
+
+  <!-- Filter tabs -->
+  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;" id="gemini-filter-tabs">
+    <button class="g-tab g-tab-active" onclick="geminiFilter('all')" data-filter="all">All</button>
+    <button class="g-tab" onclick="geminiFilter('LOW')"    data-filter="LOW">? LOW</button>
+    <button class="g-tab" onclick="geminiFilter('REJECT')" data-filter="REJECT">✗ REJECT</button>
+  </div>
+
+  <div id="gemini-alias-list"></div>
+</div>
+
+<!-- ── Receipt results ────────────────────────────────────────── -->
+<div id="results-card" style="display:none;" class="t-card">
+  <div style="font-weight:700;font-size:15px;color:#1f2937;margin-bottom:14px;">
+    Receipts
+    <span id="results-count" style="margin-left:6px;font-size:12px;font-weight:600;color:#9ca3af;"></span>
+  </div>
+  <div id="results-list"></div>
+</div>
+
+<!-- ── Detail modal ───────────────────────────────────────────── -->
+<div id="detail-overlay" onclick="closeDetail()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;backdrop-filter:blur(4px);"></div>
+<div id="detail-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:501;width:min(860px,94vw);max-height:85vh;overflow-y:auto;background:rgba(255,255,255,.96);backdrop-filter:blur(20px);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:24px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <div id="detail-title" style="font-weight:800;font-size:16px;color:#1f2937;"></div>
+    <button onclick="closeDetail()" style="background:none;border:none;cursor:pointer;color:#9ca3af;padding:4px;border-radius:6px;font-size:18px;">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+const LS_FOLDER = 'pw-training-folder';
+let pollTimer   = null;
+let aliasState  = {};
+let lastFeed    = [];
+
+// ── Init ──────────────────────────────────────────────────────
+(function() {
+  const saved = localStorage.getItem(LS_FOLDER);
+  if (saved) {
+    document.getElementById('folder-input').value = saved;
+    loadCacheInfo(saved);
+  }
+})();
+
+function saveFolder(v) { localStorage.setItem(LS_FOLDER, v); }
+
+function onFolderChange(v) {
+  saveFolder(v);
+  if (v.trim()) loadCacheInfo(v.trim());
+}
+
+async function loadCacheInfo(folder) {
+  try {
+    const r = await fetch('/api/receipts/training/cache-info?folder=' + encodeURIComponent(folder));
+    const d = await r.json();
+    const el   = document.getElementById('cache-info');
+    const btn  = document.getElementById('clear-cache-btn');
+    const chk  = document.getElementById('resume-chk');
+    if (d.count > 0) {
+      el.textContent   = `${d.count} files cached from last run`;
+      btn.style.display = 'inline-block';
+      chk.checked      = true;   // auto-enable resume when cache exists
+    } else {
+      el.textContent   = 'No cache yet';
+      btn.style.display = 'none';
+      chk.checked      = false;
+    }
+  } catch(e) {}
+}
+
+async function clearCache() {
+  const folder = document.getElementById('folder-input').value.trim();
+  if (!folder) return;
+  if (!confirm(`Clear all cached results for:\n${folder}\n\nNext run will re-process all files.`)) return;
+  try {
+    const r = await fetch('/api/receipts/training/clear-cache', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ folder })
+    });
+    if (r.ok) {
+      document.getElementById('cache-info').textContent   = 'Cache cleared';
+      document.getElementById('clear-cache-btn').style.display = 'none';
+      document.getElementById('resume-chk').checked = false;
+    }
+  } catch(e) {}
+}
+
+// ── Start training ─────────────────────────────────────────────
+async function startTraining() {
+  const folder = document.getElementById('folder-input').value.trim();
+  if (!folder) { alert('Please enter a folder path'); return; }
+  const resume = document.getElementById('resume-chk').checked;
+
+  const btn = document.getElementById('start-btn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke-opacity=".3"/><path d="M21 12a9 9 0 0 0-9-9"/></svg></span> Starting…`;
+
+  try {
+    const resp = await fetch('/api/receipts/training/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ folder, resume })
+    });
+    const data = await resp.json();
+    if (!resp.ok) { alert(data.error); btn.disabled = false; setStartBtn(); return; }
+    document.getElementById('progress-card').style.display = 'block';
+    document.getElementById('summary-card').style.display  = 'none';
+    document.getElementById('alias-card').style.display    = 'none';
+    document.getElementById('results-card').style.display  = 'none';
+    document.getElementById('gemini-review-card').style.display = 'none';
+    geminiAliasData = [];
+    lastFeed = [];
+    document.getElementById('feed-list').innerHTML = '';
+    startPolling();
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.disabled = false; setStartBtn();
+  }
+}
+
+function setStartBtn() {
+  const btn = document.getElementById('start-btn');
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Training`;
+}
+
+// ── Pause / Resume / Stop ──────────────────────────────────────
+async function pauseTraining() {
+  const btn = document.getElementById('ctrl-pause');
+  btn.disabled = true;
+  try {
+    await fetch('/api/receipts/training/pause', { method:'POST' });
+  } catch(e) {}
+  btn.disabled = false;
+}
+
+async function resumeTraining() {
+  const btn = document.getElementById('ctrl-resume');
+  btn.disabled = true;
+  try {
+    await fetch('/api/receipts/training/resume-thread', { method:'POST' });
+  } catch(e) {}
+  btn.disabled = false;
+}
+
+async function stopTraining() {
+  if (!confirm('Stop training? Progress so far will be saved.')) return;
+  const btn = document.getElementById('ctrl-stop');
+  btn.disabled = true;
+  btn.textContent = 'Stopping…';
+  try {
+    await fetch('/api/receipts/training/stop', { method:'POST' });
+  } catch(e) {}
+  btn.disabled = false;
+}
+
+// ── Polling ────────────────────────────────────────────────────
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(pollStatus, 1800);
+}
+
+async function pollStatus() {
+  try {
+    const resp = await fetch('/api/receipts/training/status');
+    const data = await resp.json();
+    updateProgress(data);
+    if (!data.running) {
+      clearInterval(pollTimer);
+      if (data.stopped_at) {
+        // Manually stopped — show partial results
+        document.getElementById('prog-spinner').style.display = 'none';
+        document.getElementById('prog-title').textContent = 'Training stopped';
+        document.getElementById('eta-label').textContent = '';
+        showResults(data);
+      } else if (data.finished_at) {
+        showResults(data);
+      }
+      setStartBtn();
+      loadHistory();  // refresh history after run ends
+      startGeminiReviewPolling();  // start polling for Gemini review
+    }
+  } catch(e) {}
+}
+
+// ── Update live progress UI ────────────────────────────────────
+function updateProgress(data) {
+  const total     = data.total || 1;
+  const processed = data.processed || 0;
+  const skipped   = data.skipped   || 0;
+  const pct       = Math.min(Math.round(processed / total * 100), 100);
+
+  document.getElementById('prog-fill').style.width  = pct + '%';
+  document.getElementById('prog-label').textContent = `${processed.toLocaleString()} / ${total.toLocaleString()}`;
+  document.getElementById('prog-pct').textContent   = `${pct}% complete${skipped ? ' · '+skipped.toLocaleString()+' skipped from cache' : ''}`;
+
+  // ETA
+  const etaEl = document.getElementById('eta-label');
+  if (data.eta_secs != null && data.running) {
+    etaEl.textContent = '~' + fmtDuration(data.eta_secs) + ' remaining';
+  } else if (!data.running && data.finished_at) {
+    etaEl.textContent = '';
+    document.getElementById('prog-spinner').style.display = 'none';
+    document.getElementById('prog-title').textContent = 'Training complete';
+  }
+
+  // Control buttons visibility
+  const isPaused  = data.paused || data.pause_requested;
+  const isRunning = data.running;
+  const btnPause  = document.getElementById('ctrl-pause');
+  const btnResume = document.getElementById('ctrl-resume');
+  const btnStop   = document.getElementById('ctrl-stop');
+  const pauseBadge = document.getElementById('paused-badge');
+  const spinner   = document.getElementById('prog-spinner');
+
+  if (isRunning) {
+    btnPause.style.display  = isPaused ? 'none'   : 'inline-flex';
+    btnResume.style.display = isPaused ? 'inline-flex' : 'none';
+    btnStop.style.display   = 'inline-flex';
+    pauseBadge.style.display = isPaused ? 'inline-block' : 'none';
+    spinner.style.display   = isPaused ? 'none' : 'inline-block';
+    if (isPaused) document.getElementById('prog-title').textContent = 'Training paused';
+    else document.getElementById('prog-title').textContent = 'Training in progress…';
+  } else {
+    btnPause.style.display  = 'none';
+    btnResume.style.display = 'none';
+    btnStop.style.display   = 'none';
+    pauseBadge.style.display = 'none';
+  }
+
+  // Current filename
+  if (data.current) {
+    document.getElementById('prog-current').textContent = '▶ ' + data.current;
+  }
+
+  // Counters
+  const c = data.counters || {};
+  document.getElementById('ctr-scanned').textContent    = (c.scanned    || 0).toLocaleString();
+  document.getElementById('ctr-receipt-no').textContent = (c.receipt_no || 0).toLocaleString();
+  document.getElementById('ctr-date-total').textContent = (c.date_total || 0).toLocaleString();
+  document.getElementById('ctr-not-found').textContent  = (c.not_found  || 0).toLocaleString();
+  document.getElementById('ctr-errors').textContent     = (c.errors     || 0).toLocaleString();
+  if (skipped > 0) {
+    document.getElementById('ctr-skipped-pill').style.display = 'inline-flex';
+    document.getElementById('ctr-skipped').textContent = skipped.toLocaleString();
+  }
+
+  // Current image
+  if (data.current_image) {
+    const img = document.getElementById('current-img');
+    const ph  = document.getElementById('img-placeholder');
+    img.src              = 'data:image/jpeg;base64,' + data.current_image;
+    img.style.display    = 'block';
+    ph.style.display     = 'none';
+  }
+
+  // Live feed — only re-render if changed
+  const feed = data.live_feed || [];
+  const feedKey = feed.map(f => f.file).join('|');
+  if (feedKey !== lastFeed) {
+    lastFeed = feedKey;
+    renderFeed(feed);
+  }
+}
+
+function renderFeed(feed) {
+  const el = document.getElementById('feed-list');
+  if (!feed.length) { el.innerHTML = ''; return; }
+  el.innerHTML = feed.map(f => {
+    let icon, statusHtml;
+    if (f.status === 'error') {
+      icon       = `<span style="color:#f87171;font-size:13px;">✗</span>`;
+      statusHtml = `<span style="color:#f87171;">${esc(f.error||'error')}</span>`;
+    } else if (f.status === 'not_receipt') {
+      icon       = `<span style="color:#d1d5db;font-size:13px;">○</span>`;
+      statusHtml = `<span style="color:#9ca3af;">Not a receipt</span>`;
+    } else {
+      const mq = f.match_quality || 'none';
+      const mqBadge = {
+        receipt_no: `<span style="background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:8px;font-size:10.5px;font-weight:700;">Receipt #</span>`,
+        date_total: `<span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:8px;font-size:10.5px;font-weight:700;">Date+Total</span>`,
+        date_only:  `<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10.5px;font-weight:700;">Date only</span>`,
+        none:       `<span style="background:#f3f4f6;color:#9ca3af;padding:1px 6px;border-radius:8px;font-size:10.5px;font-weight:700;">Not in Odoo</span>`,
+      }[mq] || '';
+      const acc    = f.accuracy != null ? Math.round(f.accuracy * 100) : null;
+      const accTxt = acc != null ? `${acc}% (${f.correct}/${f.total_items})` : '';
+      const accCol = acc == null ? '#9ca3af' : acc >= 90 ? '#065f46' : acc >= 70 ? '#92400e' : '#ef4444';
+      icon       = `<span style="color:${accCol};font-size:13px;">${f.odoo_found ? '✓' : '○'}</span>`;
+      statusHtml = `${mqBadge} ${f.date ? '<span style="color:#9ca3af;">'+esc(f.date)+'</span>' : ''} ${accTxt ? '<span style="color:'+accCol+';font-weight:700;">'+accTxt+'</span>' : ''}`;
+    }
+    return `<div class="feed-row">${icon}<span class="feed-file" title="${esc(f.file)}">${esc(f.file)}</span><span class="feed-status">${statusHtml}</span></div>`;
+  }).join('');
+}
+
+function fmtDuration(secs) {
+  if (secs < 60)   return secs + 's';
+  if (secs < 3600) return Math.round(secs/60) + 'm';
+  const h = Math.floor(secs/3600), m = Math.round((secs%3600)/60);
+  return h + 'h ' + m + 'm';
+}
+
+// ── Show results (after completion) ───────────────────────────
+function showResults(data) {
+  const s = data.summary || {};
+  document.getElementById('progress-card').style.display = 'none';
+  document.getElementById('summary-card').style.display  = 'block';
+  document.getElementById('alias-card').style.display    = 'block';
+  document.getElementById('results-card').style.display  = 'block';
+  // Show Gemini review card whenever there are alias suggestions
+  if (s.alias_suggestions > 0 || (data.alias_suggestions && Object.keys(data.alias_suggestions).length > 0)) {
+    document.getElementById('gemini-review-card').style.display = 'block';
+  }
+
+  // Stats grid
+  const accColor = s.accuracy >= 90 ? '#065f46' : s.accuracy >= 70 ? '#92400e' : '#991b1b';
+  document.getElementById('stat-grid').innerHTML = [
+    [s.receipts_scanned || 0, 'Receipts'],
+    [s.total_items || 0, 'Items'],
+    [`${s.accuracy || 0}%`, 'Accuracy', accColor],
+    [s.correct || 0, 'Correct'],
+    [(s.total_items||0) - (s.correct||0), 'Mismatched'],
+    [s.alias_suggestions || 0, 'New Aliases'],
+  ].map(([n, l, c]) => `
+    <div class="stat-box">
+      <div class="stat-num" style="${c ? 'color:'+c : ''}">${n}</div>
+      <div class="stat-lbl">${l}</div>
+    </div>`).join('');
+
+  if (data.finished_at) {
+    const d = new Date(data.finished_at);
+    document.getElementById('summary-time').textContent = `Completed ${d.toLocaleTimeString()}`;
+  }
+
+  // Alias suggestions
+  const aliases = Object.entries(data.alias_suggestions || {});
+  document.getElementById('alias-count').textContent = aliases.length;
+  aliasState = {};
+  aliases.forEach(([k]) => aliasState[k] = 'pending');
+  aliases.sort((a,b) => b[1].count - a[1].count);
+  document.getElementById('alias-list').innerHTML = aliases.length === 0
+    ? `<div style="text-align:center;padding:20px;color:#9ca3af;font-size:13px;">No alias suggestions — scanner is already well-trained for this batch!</div>`
+    : aliases.map(([k, a]) => `
+      <div class="alias-row" id="alias-row-${esc(k)}">
+        <span class="alias-raw">${esc(a.raw_text)}</span>
+        <span class="alias-arrow">→</span>
+        <span class="alias-prod">${esc(a.product_name)}</span>
+        <span class="alias-count">×${a.count} receipt${a.count!==1?'s':''}</span>
+        <button class="alias-btn alias-add" onclick="addAlias('${esc(k)}','${esc(a.raw_text)}',${a.variant_id},'${esc(a.product_name)}')">Add</button>
+        <button class="alias-btn alias-skip" onclick="skipAlias('${esc(k)}')">Skip</button>
+      </div>`).join('');
+
+  // Results list
+  const results = data.results || [];
+  document.getElementById('results-count').textContent = results.length + ' files';
+  document.getElementById('results-list').innerHTML = results.map(r => renderResultRow(r)).join('');
+}
+
+function renderResultRow(r) {
+  if (r.status === 'not_receipt') {
+    return `<div class="res-row" style="cursor:default;opacity:.5;">
+      <svg width="13" height="13" fill="none" stroke="#d1d5db" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      <span class="file-name" style="color:#9ca3af;">${esc(r.file)}</span>
+      <span style="font-size:11.5px;color:#9ca3af;">Not a receipt</span>
+    </div>`;
+  }
+  if (r.status === 'error') {
+    return `<div class="res-row" style="cursor:default;">
+      <svg width="13" height="13" fill="none" stroke="#f87171" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span class="file-name">${esc(r.file)}</span>
+      <span style="font-size:11.5px;color:#f87171;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.error||'')}</span>
+    </div>`;
+  }
+  return (r.receipts || []).map(rec => {
+    const acc      = rec.accuracy != null ? Math.round(rec.accuracy * 100) : null;
+    const pillCls  = acc == null ? 'acc-none' : acc >= 90 ? 'acc-high' : acc >= 70 ? 'acc-mid' : 'acc-low';
+    const pillTxt  = acc != null ? `${acc}% (${rec.correct}/${rec.total_items})` : 'No Odoo data';
+    const mqBadge  = {
+      receipt_no: `<span style="font-size:10px;font-weight:700;background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:8px;">Receipt #</span>`,
+      date_total: `<span style="font-size:10px;font-weight:700;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:8px;">Date+Total</span>`,
+      date_only:  `<span style="font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;">Date only ⚠</span>`,
+      none:       '',
+    }[rec.match_quality || 'none'] || '';
+    const odooTxt  = rec.odoo_found
+      ? `<span style="font-size:11.5px;color:#6b7280;">${esc(rec.odoo_order||'')} ${mqBadge}</span>`
+      : `<span style="font-size:11.5px;color:#fbbf24;">Not in Odoo</span>`;
+    return `<div class="res-row" onclick="loadDetail('${esc(r.file)}','${esc(rec.receipt_no||'')}','${esc(rec.date||'')}')">
+      <svg width="13" height="13" fill="none" stroke="#9ca3af" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+      <span class="file-name">${esc(r.file)}${rec.receipt_no ? ' · #'+esc(rec.receipt_no) : ''}</span>
+      ${odooTxt}
+      <span style="font-size:11.5px;color:#9ca3af;">${esc(rec.date||'')}</span>
+      <span class="acc-pill ${pillCls}">${pillTxt}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Detail modal ───────────────────────────────────────────────
+async function loadDetail(file, receiptNo, date) {
+  try {
+    const resp = await fetch('/api/receipts/training/detail/' + encodeURIComponent(file));
+    const data = await resp.json();
+    showDetail(data, receiptNo, date);
+  } catch(e) { alert('Could not load detail: ' + e.message); }
+}
+
+function showDetail(data, receiptNo, date) {
+  document.getElementById('detail-overlay').style.display = 'block';
+  document.getElementById('detail-modal').style.display   = 'block';
+  document.getElementById('detail-title').textContent     = `${data.file}${receiptNo ? ' · #'+receiptNo : ''}${date ? ' · '+date : ''}`;
+  const receipts = data.receipts || [];
+  if (!receipts.length) {
+    document.getElementById('detail-body').innerHTML = '<p style="color:#9ca3af;">No receipts found in this image</p>';
+    return;
+  }
+  document.getElementById('detail-body').innerHTML = receipts.map(rec => {
+    const rows = (rec.comparison || []).map(c => {
+      const cls  = c.result === 'correct' ? 'cmp-correct' : c.result === 'wrong_product' ? 'cmp-wrong' : c.result === 'missed' ? 'cmp-missed' : 'cmp-no-odoo';
+      const icon = c.result === 'correct' ? '✓' : c.result === 'wrong_product' ? '✗' : c.result === 'missed' ? '↓' : '?';
+      const iclr = c.result === 'correct' ? '#065f46' : c.result === 'wrong_product' ? '#991b1b' : c.result === 'missed' ? '#1e40af' : '#92400e';
+      return `<tr class="${cls}">
+        <td style="font-weight:700;color:${iclr};text-align:center;width:24px;">${icon}</td>
+        <td style="font-family:monospace;font-size:12px;color:#6b7280;">${esc(c.raw_text||'—')}</td>
+        <td style="font-size:12px;">${c.scanner?.name ? `<span style="font-weight:600;">${esc(c.scanner.name)}</span> <span style="font-size:10.5px;color:#9ca3af;">${c.scanner.confidence} ${c.scanner.score}%</span>` : '<span style="color:#f87171;font-style:italic;">no match</span>'}</td>
+        <td style="font-size:12px;font-weight:600;color:#374151;">${c.odoo?.name ? esc(c.odoo.name) : '<span style="color:#9ca3af;">—</span>'}</td>
+        <td style="font-size:12px;color:#6b7280;text-align:right;">${c.odoo?.price != null ? 'Shs '+c.odoo.price : ''}</td>
+        <td style="font-size:12px;text-align:right;">${c.qty||1}</td>
+        <td style="font-size:12px;text-align:right;">${c.line_total != null ? Number(c.line_total).toLocaleString('en-KE') : '—'}</td>
+      </tr>`;
+    }).join('');
+    const mq = rec.match_quality || 'none';
+    const mqBadge = { receipt_no:'<span style="font-size:10.5px;background:#d1fae5;color:#065f46;padding:1px 7px;border-radius:8px;font-weight:700;">matched by receipt #</span>', date_total:'<span style="font-size:10.5px;background:#dbeafe;color:#1e40af;padding:1px 7px;border-radius:8px;font-weight:700;">matched by date+total</span>', date_only:'<span style="font-size:10.5px;background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:8px;font-weight:700;">date only ⚠</span>' }[mq] || '';
+    return `<div style="margin-bottom:16px;">
+      <div style="font-size:12.5px;color:#6b7280;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        ${rec.odoo_found ? `<span style="color:#065f46;font-weight:700;">✓ ${esc(rec.odoo_order||'')}</span>` : '<span style="color:#f59e0b;font-weight:700;">Not found in Odoo</span>'}
+        ${mqBadge}
+        ${rec.date ? '<span>· ' + esc(rec.date) + '</span>' : ''}
+        <span>· ${rec.correct}/${rec.total_items} correct</span>
+      </div>
+      <table class="cmp-tbl">
+        <thead><tr><th></th><th>Written</th><th>Scanner matched</th><th>Odoo actual</th>
+          <th style="text-align:right;">Price</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+  }).join('');
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').style.display = 'none';
+  document.getElementById('detail-modal').style.display   = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+
+// ── Alias management ───────────────────────────────────────────
+async function addAlias(key, rawText, variantId, productName) {
+  const row = document.getElementById('alias-row-' + key);
+  try {
+    const resp = await fetch('/api/receipts/add-alias', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ raw_text: rawText, variant_id: variantId })
+    });
+    const data = await resp.json();
+    if (!resp.ok) { alert(data.error); return; }
+    aliasState[key] = 'added';
+    if (row) row.innerHTML = `
+      <span class="alias-raw">${esc(rawText)}</span>
+      <span class="alias-arrow">→</span>
+      <span class="alias-prod">${esc(productName)}</span>
+      <span style="flex:1"></span>
+      <span class="alias-btn alias-done">✓ Added</span>`;
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function skipAlias(key) {
+  aliasState[key] = 'skipped';
+  const row = document.getElementById('alias-row-' + key);
+  if (row) row.style.opacity = '.35';
+}
+
+async function addAllAliases() {
+  const btn = document.getElementById('add-all-btn');
+  btn.disabled = true;
+  const resp = await fetch('/api/receipts/training/status');
+  const data = await resp.json();
+  const all  = Object.entries(data.alias_suggestions || {});
+  let added  = 0;
+  for (const [key, a] of all) {
+    if (aliasState[key] === 'added') continue;
+    try {
+      const r = await fetch('/api/receipts/add-alias', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ raw_text: a.raw_text, variant_id: a.variant_id })
+      });
+      if (r.ok) { aliasState[key] = 'added'; added++; }
+    } catch(e) {}
+  }
+  btn.disabled = false;
+  btn.textContent = `✓ Added ${added} aliases`;
+}
+
+// ── Price history ──────────────────────────────────────────────
+async function refreshPriceHistory() {
+  const btn = document.getElementById('price-btn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke-opacity=".3"/><path d="M21 12a9 9 0 0 0-9-9"/></svg></span> Refreshing…`;
+  try {
+    const resp = await fetch('/api/receipts/price-history/refresh', { method:'POST' });
+    const data = await resp.json();
+    btn.innerHTML = `✓ ${data.products} products`;
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.36"/></svg> Refresh Price History from Odoo`;
+    }, 3000);
+  } catch(e) { btn.disabled = false; btn.textContent = 'Error — retry'; }
+}
+
+// ── Gemini AI Review ───────────────────────────────────────────
+let geminiAliasData = [];
+let geminiFilterVal = 'all';
+let geminiReviewTimer = null;
+let _lastGeminiStatus = null;
+
+function startGeminiReviewPolling() {
+  clearInterval(geminiReviewTimer);
+  geminiReviewTimer = setInterval(pollGeminiReview, 2500);
+}
+
+async function runGeminiReview() {
+  const btn = document.getElementById('gemini-run-btn');
+  const spinnerHtml = `<span class="spin"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke-opacity=".3"/><path d="M21 12a9 9 0 0 0-9-9"/></svg></span> Analysing…`;
+  const idleHtml    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2L9.5 9.5H2L8 14l-2.5 7.5L12 17l6.5 4.5L16 14l6-4.5H14.5z" fill="#8b5cf6"/></svg> Re-analyse with Gemini`;
+
+  if (btn) { btn.disabled = true; btn.innerHTML = spinnerHtml; }
+
+  // Set running immediately so transition is always captured by first poll
+  _lastGeminiStatus  = 'running';
+  _geminiPopoutDone  = false;
+  geminiAliasData    = [];   // clear stale data so UI is fresh
+
+  document.getElementById('gemini-review-card').style.display = 'block';
+  document.getElementById('gemini-auto-banner').style.display = 'none';
+  const badge = document.getElementById('gemini-review-status-badge');
+  badge.textContent = '⏳ Reviewing…';
+  badge.style.background = '#ede9fe';
+  badge.style.color = '#5b21b6';
+
+  try {
+    const resp = await fetch('/api/receipts/training/gemini-review/run', { method: 'POST' });
+    const d    = await resp.json();
+    if (!resp.ok) {
+      alert(d.error);
+      if (btn) { btn.disabled = false; btn.innerHTML = idleHtml; }
+      _lastGeminiStatus = null;
+      return;
+    }
+    startGeminiReviewPolling();
+  } catch(e) {
+    alert('Error: ' + e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = idleHtml; }
+    _lastGeminiStatus = null;
+  }
+}
+
+async function pollGeminiReview() {
+  try {
+    const resp = await fetch('/api/receipts/training/gemini-review');
+    const data = await resp.json();
+    renderGeminiReview(data);
+    if (data.status && data.status !== 'running') {
+      clearInterval(geminiReviewTimer);
+    }
+  } catch(e) {}
+}
+
+function renderGeminiReview(data) {
+  const card   = document.getElementById('gemini-review-card');
+  const badge  = document.getElementById('gemini-review-status-badge');
+  const status = data.status;
+
+  if (!status) return;
+
+  card.style.display = 'block';
+
+  const btnLabel = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2L9.5 9.5H2L8 14l-2.5 7.5L12 17l6.5 4.5L16 14l6-4.5H14.5z" fill="#8b5cf6"/></svg> Re-analyse with Gemini`;
+
+  if (status === 'running') {
+    badge.textContent      = '⏳ Reviewing…';
+    badge.style.background = '#ede9fe';
+    badge.style.color      = '#5b21b6';
+  } else if (status === 'done') {
+    badge.textContent      = '✓ Done';
+    badge.style.background = '#d1fae5';
+    badge.style.color      = '#065f46';
+    const rb = document.getElementById('gemini-run-btn');
+    if (rb) { rb.disabled = false; rb.innerHTML = btnLabel; }
+  } else if (status && status.startsWith('error')) {
+    badge.textContent      = '⚠ ' + status;
+    badge.style.background = '#fee2e2';
+    badge.style.color      = '#991b1b';
+    const rb = document.getElementById('gemini-run-btn');
+    if (rb) { rb.disabled = false; rb.innerHTML = btnLabel; }
+  } else if (status && status.startsWith('skipped')) {
+    badge.textContent      = status;
+    badge.style.background = '#f3f4f6';
+    badge.style.color      = '#6b7280';
+  }
+
+  _lastGeminiStatus = status;
+
+  // Sync from server when running or on first load
+  if (status === 'running' || geminiAliasData.length === 0) {
+    geminiAliasData = data.aliases || [];
+  }
+
+  // When review completed: pop out auto-added items & show banner (flag-based, not transition-based)
+  if (status === 'done' && !_geminiPopoutDone) {
+    _geminiPopoutDone = true;
+    const autoAdded = data.auto_added || 0;
+    // Remove items that backend already added (action='added')
+    geminiAliasData = geminiAliasData.filter(a => a.action !== 'added');
+    // Show banner
+    if (autoAdded > 0) {
+      const banner = document.getElementById('gemini-auto-banner');
+      document.getElementById('gemini-auto-banner-text').textContent =
+        `✓ ${autoAdded} alias${autoAdded !== 1 ? 'es' : ''} automatically added to catalog (HIGH & MEDIUM confidence)`;
+      banner.style.display = 'flex';
+    }
+    // Default to showing LOW items first (the ones needing review)
+    geminiFilterVal = 'LOW';
+    document.querySelectorAll('.g-tab').forEach(t =>
+      t.classList.toggle('g-tab-active', t.dataset.filter === 'LOW'));
+  }
+
+  // Update tab counts (from current local state — only LOW + REJECT remain)
+  const counts = {all: geminiAliasData.length, LOW: 0, REJECT: 0};
+  geminiAliasData.forEach(a => {
+    if (a.confidence === 'LOW')    counts.LOW++;
+    if (a.confidence === 'REJECT') counts.REJECT++;
+  });
+  document.querySelectorAll('.g-tab').forEach(t => {
+    const f = t.dataset.filter;
+    const labels = {
+      all: `All (${counts.all})`,
+      LOW: `? LOW (${counts.LOW})`,
+      REJECT: `✗ REJECT (${counts.REJECT})`
+    };
+    if (labels[f]) t.textContent = labels[f];
+  });
+
+  renderGeminiList();
+}
+
+function geminiFilter(val) {
+  geminiFilterVal = val;
+  document.querySelectorAll('.g-tab').forEach(t => {
+    t.classList.toggle('g-tab-active', t.dataset.filter === val);
+  });
+  renderGeminiList();
+}
+
+// ── Catalog cache for inline correction autocomplete ──────────
+let _catalogCache = null;
+async function _getCatalog() {
+  if (_catalogCache) return _catalogCache;
+  try {
+    const r = await fetch('/api/receipts/training/catalog-list');
+    _catalogCache = await r.json();
+  } catch(e) { _catalogCache = []; }
+  return _catalogCache;
+}
+
+// Track inline-edit open state: raw_text currently being edited
+let _editingAlias = null;
+
+function renderGeminiList() {
+  const el = document.getElementById('gemini-alias-list');
+
+  const visible = geminiFilterVal === 'all'
+    ? geminiAliasData
+    : geminiAliasData.filter(a => a.confidence === geminiFilterVal);
+
+  // Count rejected locally
+  const rejectedCnt = geminiAliasData.filter(a => a.action === 'rejected').length;
+
+  const pillHtml = rejectedCnt ? `
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+      <span style="background:#f3f4f6;color:#6b7280;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;">✗ ${rejectedCnt} skipped</span>
+      <span style="font-size:12px;color:#9ca3af;">${visible.filter(a => !a.action).length} remaining</span>
+    </div>` : '';
+
+  // Items still needing action
+  const pending = visible.filter(a => !a.action);
+
+  if (!visible.length) {
+    el.innerHTML = `<div style="text-align:center;padding:20px;color:#9ca3af;font-size:13px;">No items in this category</div>`;
+    return;
+  }
+
+  if (!pending.length) {
+    el.innerHTML = pillHtml + `<div style="text-align:center;padding:20px;color:#9ca3af;font-size:13px;">All items processed ✓</div>`;
+    return;
+  }
+
+  const rows = pending.map((a, i) => {
+    const rawKey   = esc(a.raw_text || '');
+    const vid      = a.variant_id || '';
+    const isReject = a.confidence === 'REJECT' || !a.variant_id;
+    const isEditing = _editingAlias === a.raw_text;
+
+    const productDisplay = isReject
+      ? `<span style="color:#9ca3af;font-style:italic;flex:1;">No match</span>`
+      : `<span class="alias-prod" style="flex:1;">${esc(a.product_name||'')}</span>`;
+
+    // Inline edit form (shown when pencil clicked)
+    const editForm = isEditing ? `
+      <div class="alias-edit-form" id="edit-form-${i}">
+        <input type="text" id="alias-search-${i}" placeholder="Search product…"
+          class="alias-search-input"
+          oninput="filterAliasProducts(this, ${i})"
+          autocomplete="off"/>
+        <div class="alias-search-results" id="alias-results-${i}"></div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button class="alias-btn alias-skip" style="font-size:11px;" onclick="_editingAlias=null;renderGeminiList()">Cancel</button>
+        </div>
+      </div>` : '';
+
+    const actionBtns = isReject
+      ? `<button class="alias-btn alias-skip" onclick="geminiAction('${rawKey}',${vid||0},'reject')">Skip</button>`
+      : `<button class="alias-btn alias-add" onclick="geminiAction('${rawKey}',${vid},'add')">Add</button>
+         <button class="alias-btn alias-skip" onclick="geminiAction('${rawKey}',${vid},'reject')">Skip</button>
+         <button class="alias-btn alias-edit" title="Correct product" onclick="openAliasEdit('${rawKey}', ${i})"
+           style="background:#f3f4f6;border:1px solid #e5e7eb;color:#374151;padding:3px 7px;border-radius:5px;font-size:12px;cursor:pointer;">✏</button>`;
+
+    return `<div class="g-alias-row" data-raw="${rawKey}">
+      <span class="g-conf-badge g-${esc(a.confidence)}">${esc(a.confidence)}</span>
+      <span class="alias-raw">${esc(a.raw_text)}</span>
+      <span class="alias-arrow">→</span>
+      ${productDisplay}
+      <span style="font-size:11px;color:#9ca3af;flex-shrink:0;">×${a.count||1}</span>
+      <span style="font-size:11px;color:#9ca3af;flex:1;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(a.reason||'')}">${esc(a.reason||'')}</span>
+      ${actionBtns}
+      ${editForm}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = pillHtml + rows;
+
+  // If editing, pre-load catalog and focus
+  if (_editingAlias) {
+    const idx = pending.findIndex(a => a.raw_text === _editingAlias);
+    if (idx >= 0) {
+      _getCatalog().then(cat => {
+        const inp = document.getElementById(`alias-search-${idx}`);
+        if (inp) { inp.focus(); showAliasResults(idx, cat); }
+      });
+    }
+  }
+}
+
+async function openAliasEdit(rawText, rowIdx) {
+  _editingAlias = rawText;
+  renderGeminiList();
+  // Pre-populate results
+  const cat = await _getCatalog();
+  showAliasResults(rowIdx, cat);
+  const inp = document.getElementById(`alias-search-${rowIdx}`);
+  if (inp) inp.focus();
+}
+
+function showAliasResults(rowIdx, cat, query) {
+  const resEl = document.getElementById(`alias-results-${rowIdx}`);
+  if (!resEl) return;
+  let items = cat;
+  if (query && query.length >= 1) {
+    const q = query.toLowerCase();
+    items = cat.filter(p => p.name.toLowerCase().includes(q) || (p.code && p.code.toLowerCase().includes(q)));
+  }
+  items = items.slice(0, 30);
+  resEl.innerHTML = items.map(p =>
+    `<div class="alias-result-item" onclick="selectAliasProduct('${esc(_editingAlias)}', ${p.id}, '${esc(p.name)}')">${esc(p.name)}${p.code ? ` <span style="color:#9ca3af;font-size:11px;">[${esc(p.code)}]</span>` : ''}</div>`
+  ).join('') || `<div style="padding:8px;color:#9ca3af;font-size:12px;">No products found</div>`;
+}
+
+function filterAliasProducts(inputEl, rowIdx) {
+  _getCatalog().then(cat => showAliasResults(rowIdx, cat, inputEl.value));
+}
+
+async function selectAliasProduct(rawText, variantId, productName) {
+  _editingAlias = null;
+  // Update local alias data to show the corrected product before calling server
+  const a = geminiAliasData.find(x => x.raw_text === rawText);
+  if (a) { a._corrected_vid = variantId; a._corrected_name = productName; }
+  await geminiAction(rawText, variantId, 'add', true);
+}
+
+async function geminiAction(rawText, variantId, action, isCorrected) {
+  try {
+    const resp = await fetch('/api/receipts/training/gemini-review/apply', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ raw_text: rawText, variant_id: variantId, action })
+    });
+    const d = await resp.json();
+    if (!resp.ok) { alert(d.error); return; }
+    // Pop out: remove from geminiAliasData
+    geminiAliasData = geminiAliasData.filter(x => x.raw_text !== rawText);
+    // Update tab counts
+    renderGeminiReview({ status: _lastGeminiStatus, aliases: geminiAliasData });
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// geminiApplyAll removed — HIGH+MEDIUM are now auto-applied by the backend when review completes
+
+// ── Run History ────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const resp = await fetch('/api/receipts/training/history/compare?n=20');
+    const runs = await resp.json();
+    const el   = document.getElementById('history-body');
+    document.getElementById('hist-count').textContent = runs.length + ' runs';
+
+    if (!runs.length) {
+      el.innerHTML = `<div style="text-align:center;padding:16px;color:#9ca3af;font-size:13px;">No training runs yet</div>`;
+      return;
+    }
+
+    // Find best accuracy run
+    const bestAcc = Math.max(...runs.map(r => r.accuracy || 0));
+
+    el.innerHTML = `
+      <table class="hist-tbl">
+        <thead><tr>
+          <th>Date</th><th>Folder</th><th>Images</th><th>Receipts</th>
+          <th>Items</th><th>Correct</th><th>Accuracy</th><th>Aliases</th><th>Status</th>
+        </tr></thead>
+        <tbody>
+          ${runs.map(r => {
+            const acc    = r.accuracy || 0;
+            const isBest = acc === bestAcc && bestAcc > 0;
+            const barClr = acc >= 80 ? '#059669' : acc >= 60 ? '#d97706' : '#dc2626';
+            const accPct = Math.round(acc);
+            return `<tr class="${isBest ? 'hist-best' : ''}">
+              <td style="font-weight:600;white-space:nowrap;">${esc(r.date)} <span style="color:#9ca3af;font-size:11px;">${esc(r.time||'')}</span></td>
+              <td style="font-family:monospace;font-size:11.5px;color:#6b7280;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.folder)}">${esc(r.folder)}</td>
+              <td style="text-align:right;">${(r.images||0).toLocaleString()}</td>
+              <td style="text-align:right;">${(r.receipts_scanned||0).toLocaleString()}</td>
+              <td style="text-align:right;">${(r.total_items||0).toLocaleString()}</td>
+              <td style="text-align:right;color:#059669;font-weight:700;">${(r.correct||0).toLocaleString()}</td>
+              <td>
+                <span style="font-weight:800;color:${barClr};margin-right:6px;">${accPct}%</span>
+                <span class="acc-bar-wrap"><span class="acc-bar-fill" style="width:${accPct}%;background:${barClr};"></span></span>
+                ${isBest ? ' <span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:8px;font-weight:700;">best</span>' : ''}
+              </td>
+              <td style="text-align:right;">${(r.alias_suggestions||0).toLocaleString()}</td>
+              <td>${r.stopped
+                ? '<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:8px;font-weight:700;">stopped</span>'
+                : '<span style="font-size:11px;background:#d1fae5;color:#065f46;padding:1px 7px;border-radius:8px;font-weight:700;">complete</span>'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) {
+    document.getElementById('history-body').innerHTML =
+      `<div style="color:#f87171;font-size:13px;">Could not load history</div>`;
+  }
+}
+
+// ── Utils ──────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Check if training is already running on page load
+pollStatus();
+loadHistory();
+pollGeminiReview();
+</script>
+{% endblock %}

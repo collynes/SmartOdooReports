@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from functools import wraps
 import psycopg2
 import psycopg2.extras
-import os, io, json
+import os, io, json, sys
 from datetime import date, timedelta
 from dotenv import load_dotenv
 from insights import get_daily_insight
@@ -30,6 +30,7 @@ APP_USERS = {
 
 DB_CONFIG = {
     'host':     os.getenv('DB_HOST', 'localhost'),
+    'port':     int(os.getenv('DB_PORT', 5432)),
     'dbname':   os.getenv('DB_NAME', 'odoo18'),
     'user':     os.getenv('DB_USER', 'odoo18'),
     'password': os.getenv('DB_PASSWORD', 'odoo18'),
@@ -2474,6 +2475,1704 @@ def get_target():
     return jsonify({'target': get_monthly_target_from_claude()})
 
 
+# ── Receipt Scanner ───────────────────────────────────────────
+
+import subprocess
+import threading
+import base64 as _base64
+import io as _io
+from rapidfuzz import fuzz
+from datetime import datetime as _dt
+
+_PRODUCTS_MD_PATH = os.path.join(os.path.dirname(__file__), 'products.md')
+_OCR_PY_PATH      = os.path.join(os.path.dirname(__file__), 'receipt_ocr.py')
+_PRICE_HIST_PATH  = os.path.join(os.path.dirname(__file__), 'price_history.json')
+
+# ── Price history (learned from Odoo, persisted to JSON) ──────
+_price_history: dict = {}
+
+def _load_price_history():
+    global _price_history
+    try:
+        with open(_PRICE_HIST_PATH) as f:
+            _price_history = json.load(f)
+    except Exception:
+        _price_history = {}
+
+_load_price_history()
+
+# ── In-memory catalog — parsed once at startup ─────────────────
+_CATALOG: list = []
+
+def _load_catalog():
+    global _CATALOG
+    products = []
+    try:
+        with open(_PRODUCTS_MD_PATH) as f:
+            md = f.read()
+        for line in md.split('\n'):
+            if not line.startswith('|') or 'variant_id' in line or line.startswith('| ---'):
+                continue
+            cols = [c.strip() for c in line.split('|') if c.strip()]
+            if len(cols) < 5:
+                continue
+            try:
+                products.append({
+                    'id':      int(cols[0]),
+                    'name':    cols[1],
+                    'code':    cols[2] if cols[2] != '—' else None,
+                    'price':   float(cols[3]),
+                    'aliases': [a.strip().lower() for a in cols[4].split(',') if a.strip()],
+                })
+            except Exception:
+                continue
+    except Exception:
+        pass
+    _CATALOG = products
+
+_load_catalog()  # parse once at startup
+
+
+def _catalog_compact() -> str:
+    """Pipe-delimited compact catalog string for Gemini prompts (~40% fewer tokens than markdown)."""
+    lines = ['id|name|code|price|aliases']
+    for p in _CATALOG:
+        aliases = ','.join(p['aliases'])
+        code    = p['code'] or '—'
+        lines.append(f"{p['id']}|{p['name']}|{code}|{p['price']}|{aliases}")
+    return '\n'.join(lines)
+
+
+def _fuzzy_match_item(raw_text: str, qty: int = 1, line_total: float = None) -> dict:
+    """
+    Match a raw receipt text against the in-memory catalog using rapidfuzz.
+    Returns {product, score, confidence, top_candidates}.
+    """
+    if not raw_text or not _CATALOG:
+        return {'product': None, 'score': 0, 'confidence': 'LOW', 'top_candidates': []}
+
+    text = raw_text.lower().strip()
+    scored = []
+
+    for p in _CATALOG:
+        # Score against product name
+        name_score = fuzz.WRatio(text, p['name'].lower())
+
+        # Score against each alias — take best
+        alias_score = max(
+            (fuzz.WRatio(text, a) for a in p['aliases']),
+            default=0
+        )
+
+        # Score against product code (prefix bonus — codes are short so exact prefix matters)
+        code_score = 0
+        if p['code']:
+            code = p['code'].lower()
+            if text == code:
+                code_score = 100
+            elif text.startswith(code) or code.startswith(text[:3]):
+                code_score = 88
+
+        base_score = max(name_score, alias_score, code_score)
+
+        # Price cross-check boost — use learned historical range if available, else catalog price
+        if line_total and qty and p['price']:
+            unit      = line_total / qty
+            hist      = _price_history.get(str(p['id']))
+            if hist and hist.get('count', 0) >= 3:
+                # Use learned price range (handles discounts / upsells)
+                p_min = hist['min']
+                p_max = hist['max']
+                p_mean = hist['mean']
+                if p_min <= unit <= p_max:
+                    base_score = min(base_score + 32, 100)  # within known sold range
+                elif abs(unit - p_mean) / max(p_mean, 1) < 0.20:
+                    base_score = min(base_score + 16, 100)  # within 20% of mean
+            else:
+                # Fall back to catalog price
+                catalog_p = p['price']
+                if catalog_p > 0:
+                    diff_pct = abs(unit - catalog_p) / catalog_p
+                    if diff_pct == 0:
+                        base_score = min(base_score + 35, 100)
+                    elif diff_pct < 0.05:
+                        base_score = min(base_score + 25, 100)
+                    elif diff_pct < 0.10:
+                        base_score = min(base_score + 12, 100)
+
+        scored.append((base_score, p))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best_score, best_product = scored[0]
+
+    # Top 5 candidates for Gemini fallback
+    top_candidates = [
+        {'id': p['id'], 'name': p['name'], 'code': p['code'], 'price': p['price'],
+         'aliases': ','.join(p['aliases']), 'score': s}
+        for s, p in scored[:5]
+    ]
+
+    if best_score >= 85:
+        confidence = 'HIGH'
+    elif best_score >= 65:
+        confidence = 'MEDIUM'
+    else:
+        confidence = 'LOW'
+
+    return {
+        'product':        best_product if best_score >= 65 else None,
+        'score':          best_score,
+        'confidence':     confidence,
+        'top_candidates': top_candidates,
+    }
+
+
+def _run_ocr(image_b64: str):
+    """Run receipt_ocr.py subprocess. Returns dict with is_receipt, reason, raw_text."""
+    try:
+        proc = subprocess.run(
+            [sys.executable, _OCR_PY_PATH],
+            input=json.dumps({'image': image_b64}),
+            capture_output=True, text=True, timeout=30
+        )
+        return json.loads(proc.stdout)
+    except Exception as e:
+        return {'is_receipt': None, 'raw_text': '', 'reason': str(e)}
+
+
+def _call_gemini(pil_img, prompt: str):
+    """Single Gemini call — returns parsed JSON list of receipts."""
+    import google.generativeai as genai
+    api_key = os.getenv('GEMINI_API_KEY', '')
+    if not api_key:
+        raise ValueError('GEMINI_API_KEY not configured')
+    genai.configure(api_key=api_key)
+    model  = genai.GenerativeModel('gemini-2.0-flash')
+    result = model.generate_content([pil_img, prompt])
+    raw    = (result.text or '').replace('```json', '').replace('```', '').strip()
+    parsed = json.loads(raw)
+    return parsed if isinstance(parsed, list) else [parsed]
+
+
+# ── Prompt builders ────────────────────────────────────────────
+
+_RECEIPT_RULES = """Rules:
+- Extract EVERY receipt in the image — do not skip any
+- Keep each receipt's items strictly within its own table boundaries
+- RECEIPT NUMBER: 4-digit serial near the BOTTOM (e.g. 1813, 1850). NOT the date.
+- PARTIAL PREFIX MATCHING: match first 2-4 chars against codes/aliases. "LD-910W" → LD Glow. Always prefer partial match over null.
+- Use price × qty as confirmation signal — close match → MEDIUM confidence
+- HIGH: code or name clearly matches. MEDIUM: partial/prefix/price match. LOW: best guess.
+- null matched_product only when truly zero resemblance
+- Use receipt price for line_total if different from catalog
+- Dates written as D/M/YY"""
+
+def _prompt_gemini_only(catalog_compact: str) -> str:
+    return f"""You are an OCR and product matching assistant for Party World Shop, Nairobi.
+This image may contain ONE or MULTIPLE cash sale receipts. Extract EVERY receipt.
+Catalog (id|name|code|price|aliases):
+{catalog_compact}
+
+Return ONLY valid JSON array:
+[{{"receipt_no":"string or null","date":"YYYY-MM-DD or null","customer":"string or null",
+"total_written":number_or_null,"items":[{{"raw_text":"exactly as written","qty":number,
+"unit_price":number_or_null,"line_total":number_or_null,
+"matched_product":{{"variant_id":number,"name":"name","code":"code or null","catalog_price":number}} or null,
+"confidence":"HIGH or MEDIUM or LOW","confidence_reason":"brief"}}],"notes":"any observations"}}]
+{_RECEIPT_RULES}"""
+
+
+def _prompt_extract_only() -> str:
+    return """You are a receipt OCR assistant for Party World Shop, Nairobi.
+This image may contain ONE or MULTIPLE cash sale receipts. Extract EVERY receipt.
+Do NOT match products — just extract the raw written text.
+
+Return ONLY valid JSON array:
+[{"receipt_no":"string or null","date":"YYYY-MM-DD or null","customer":"string or null",
+"total_written":number_or_null,
+"items":[{"raw_text":"exactly as written in Particulars column","qty":number,
+"unit_price":number_or_null,"line_total":number_or_null}],
+"notes":"any observations"}]
+
+Rules:
+- Extract EVERY receipt — do not skip any
+- RECEIPT NUMBER: 4-digit serial near BOTTOM. NOT the date.
+- raw_text: copy exactly what is handwritten, do not interpret or clean up
+- Dates written as D/M/YY"""
+
+
+def _prompt_resolve_ambiguous(ambiguous_items: list) -> str:
+    lines = []
+    for i, it in enumerate(ambiguous_items):
+        cands = '\n'.join(
+            f"  - {c['id']}|{c['name']}|{c['code'] or '—'}|{c['price']}|{c['aliases']}"
+            for c in it['candidates']
+        )
+        lines.append(
+            f"{i+1}. raw_text=\"{it['raw_text']}\", qty={it['qty']}, "
+            f"line_total={it['line_total']}\n   candidates:\n{cands}"
+        )
+
+    items_block = '\n'.join(lines)
+    return f"""You are a product matching assistant for Party World Shop, Nairobi.
+Match each item below to its best candidate. Products are Chinese-manufactured party supplies
+with short codes (CXF, AQE, LD, YUB etc). Choose the closest match by code prefix, price, or alias.
+
+{items_block}
+
+Return ONLY valid JSON array, one object per item in order:
+[{{"variant_id":number or null,"name":"name or null","code":"code or null",
+"catalog_price":number or null,"confidence":"HIGH or MEDIUM or LOW",
+"confidence_reason":"brief explanation"}}]
+
+If truly no match possible, return null for all fields."""
+
+
+@app.route('/receipts')
+@login_required
+def receipts():
+    return render_template('receipts.html', **date_filter_context())
+
+
+@app.route('/api/receipts/training/catalog-list')
+@login_required
+def training_catalog_list():
+    """Lightweight catalog list for inline alias correction autocomplete."""
+    return jsonify([{'id': p['id'], 'name': p['name'], 'code': p.get('code') or ''} for p in _CATALOG])
+
+
+@app.route('/api/receipts/products')
+@login_required
+def receipts_products():
+    # Reload from disk in case file was updated, then return compact format + full md
+    _load_catalog()
+    try:
+        with open(_PRODUCTS_MD_PATH) as f:
+            md = f.read()
+    except Exception:
+        md = ''
+    return jsonify({'content': md, 'count': len(_CATALOG)})
+
+
+@app.route('/api/receipts/scan', methods=['POST'])
+@login_required
+def receipts_scan():
+    data      = request.get_json() or {}
+    image_b64 = data.get('image', '')
+    mime_type = data.get('mimeType', 'image/jpeg')
+    mode      = data.get('mode', 'hybrid')  # 'gemini_only' | 'hybrid'
+
+    if not image_b64:
+        return jsonify({'error': 'No image provided'}), 400
+
+    # ── OCR pre-filter ─────────────────────────────────────────
+    try:
+        ocr = _run_ocr(image_b64)
+    except Exception:
+        ocr = {'is_receipt': None, 'raw_text': ''}
+
+    if ocr.get('is_receipt') is False:
+        return jsonify({'not_a_receipt': True, 'reason': ocr.get('reason', 'Not a receipt')})
+
+    # ── Decode image once ──────────────────────────────────────
+    try:
+        import PIL.Image
+        img_bytes = _base64.b64decode(image_b64)
+        pil_img   = PIL.Image.open(_io.BytesIO(img_bytes))
+    except Exception as e:
+        return jsonify({'error': 'Image decode failed', 'details': str(e)}), 400
+
+    try:
+        if mode == 'gemini_only':
+            # ── GEMINI ONLY: one call with compact catalog ─────
+            receipts_list = _call_gemini(pil_img, _prompt_gemini_only(_catalog_compact()))
+            return jsonify({'receipts': receipts_list, 'mode': 'gemini_only'})
+
+        else:
+            # ── HYBRID: extract → Python match → Gemini for ambiguous only ──
+
+            # Step 1: Gemini extracts raw line items — no catalog in prompt
+            receipts_raw = _call_gemini(pil_img, _prompt_extract_only())
+
+            # Step 2: Python fuzzy match every item
+            ambiguous = []  # items needing Gemini resolve
+            for receipt in receipts_raw:
+                for item in receipt.get('items', []):
+                    raw    = item.get('raw_text', '')
+                    qty    = item.get('qty', 1)
+                    total  = item.get('line_total')
+                    match  = _fuzzy_match_item(raw, qty, total)
+
+                    item['_match'] = match  # stash for step 3
+
+                    if match['confidence'] == 'HIGH':
+                        # Resolved — fill matched_product directly
+                        p = match['product']
+                        item['matched_product']   = {
+                            'variant_id':   p['id'],
+                            'name':         p['name'],
+                            'code':         p['code'],
+                            'catalog_price': p['price'],
+                        }
+                        item['confidence']        = 'HIGH'
+                        item['confidence_reason'] = f'Python fuzzy match score {match["score"]}'
+                    else:
+                        # MEDIUM or LOW — queue for Gemini
+                        item['matched_product']   = None
+                        item['confidence']        = match['confidence']
+                        item['confidence_reason'] = f'Python score {match["score"]} — sending to AI'
+                        ambiguous.append({
+                            'receipt_idx': receipts_raw.index(receipt),
+                            'item_idx':    receipt['items'].index(item),
+                            'raw_text':    raw,
+                            'qty':         qty,
+                            'line_total':  total,
+                            'candidates':  match['top_candidates'],
+                        })
+
+            # Step 3: If any ambiguous items, resolve with Gemini (tiny prompt, no full catalog)
+            if ambiguous:
+                resolved = _call_gemini(pil_img, _prompt_resolve_ambiguous(ambiguous))
+                # resolved is a list aligned with ambiguous[]
+                for i, resolution in enumerate(resolved):
+                    if i >= len(ambiguous):
+                        break
+                    ref  = ambiguous[i]
+                    item = receipts_raw[ref['receipt_idx']]['items'][ref['item_idx']]
+                    if resolution and resolution.get('variant_id'):
+                        item['matched_product'] = {
+                            'variant_id':    resolution['variant_id'],
+                            'name':          resolution.get('name', ''),
+                            'code':          resolution.get('code'),
+                            'catalog_price': resolution.get('catalog_price', 0),
+                        }
+                        item['confidence']        = resolution.get('confidence', 'MEDIUM')
+                        item['confidence_reason'] = resolution.get('confidence_reason', 'AI resolved')
+                    else:
+                        item['confidence']        = 'LOW'
+                        item['confidence_reason'] = 'No match found'
+
+            # Clean up internal stash
+            for receipt in receipts_raw:
+                for item in receipt.get('items', []):
+                    item.pop('_match', None)
+
+            high  = sum(1 for r in receipts_raw for it in r.get('items',[]) if it.get('confidence')=='HIGH')
+            total_items = sum(len(r.get('items',[])) for r in receipts_raw)
+            return jsonify({
+                'receipts': receipts_raw,
+                'mode': 'hybrid',
+                'stats': {
+                    'total_items':    total_items,
+                    'python_resolved': high,
+                    'gemini_resolved': len(ambiguous),
+                }
+            })
+
+    except Exception as e:
+        return jsonify({'error': 'Failed to parse receipt', 'details': str(e)}), 500
+
+
+@app.route('/api/receipts/insert-odoo', methods=['POST'])
+@login_required
+def receipts_insert_odoo():
+    data       = request.get_json() or {}
+    receipt_no = data.get('receipt_no')
+    order_date = data.get('date') or date.today().isoformat()
+    customer   = data.get('customer')
+    items      = data.get('items', [])
+
+    try:
+        cfg = get_active_db_config()
+        conn = psycopg2.connect(**cfg)
+        cur  = conn.cursor()
+
+        # Get WalkIn partner
+        cur.execute("SELECT id FROM res_partner WHERE name ILIKE '%walk%in%' OR name ILIKE '%walkin%' ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        if not row:
+            cur.execute("SELECT id FROM res_partner WHERE customer_rank > 0 ORDER BY id LIMIT 1")
+            row = cur.fetchone()
+        partner_id = row[0] if row else 1
+
+        # Get company and user
+        cur.execute("SELECT id FROM res_company ORDER BY id LIMIT 1")
+        company_id = (cur.fetchone() or [1])[0]
+        cur.execute("SELECT id FROM res_users WHERE active=true ORDER BY id LIMIT 1")
+        user_id = (cur.fetchone() or [1])[0]
+
+        # Next order ID
+        cur.execute("SELECT nextval('sale_order_id_seq')")
+        order_id = cur.fetchone()[0]
+
+        # Build order name from ir.sequence
+        cur.execute("SELECT prefix, padding, number_next FROM ir_sequence WHERE code='sale.order' LIMIT 1")
+        seq_row = cur.fetchone()
+        if seq_row:
+            prefix  = (seq_row[0] or 'S').replace('%(year)s', str(date.today().year)).replace('%(month)s', f"{date.today().month:02d}")
+            padding = seq_row[1] or 5
+            num     = seq_row[2] or order_id
+            order_name = f"{prefix}{str(num).zfill(padding)}"
+            # Advance sequence
+            cur.execute("UPDATE ir_sequence SET number_next=number_next+1 WHERE code='sale.order'")
+        else:
+            order_name = f"S{str(order_id).zfill(5)}"
+
+        notes  = f"Receipt #{receipt_no}" if receipt_no else ''
+        client_ref = str(receipt_no) if receipt_no else None
+        cur.execute(
+            """INSERT INTO sale_order
+               (id, name, date_order, state, partner_id, partner_invoice_id, partner_shipping_id,
+                company_id, user_id, note, client_order_ref, picking_policy, create_uid, write_uid, create_date, write_date)
+               VALUES (%s,%s,%s,'sale',%s,%s,%s,%s,%s,%s,%s,'direct',%s,%s,NOW(),NOW())""",
+            (order_id, order_name, f"{order_date} 12:00:00",
+             partner_id, partner_id, partner_id, company_id, user_id, notes, client_ref, user_id, user_id)
+        )
+
+        # UOM
+        cur.execute("SELECT id FROM uom_uom WHERE name->>'en_US' ILIKE '%unit%' LIMIT 1")
+        uom_row = cur.fetchone()
+        uom_id  = uom_row[0] if uom_row else None
+
+        for item in items:
+            mp = item.get('matched_product') or {}
+            variant_id = mp.get('variant_id')
+            if not variant_id:
+                continue
+            cur.execute("SELECT nextval('sale_order_line_id_seq')")
+            line_id    = cur.fetchone()[0]
+            qty        = item.get('qty') or 1  # null qty (receipt stamp confusion) defaults to 1
+            price      = item.get('unit_price') or mp.get('catalog_price', 0)
+            name       = mp.get('name', '')
+            cur.execute(
+                """INSERT INTO sale_order_line
+                   (id, order_id, product_id, name, product_uom_qty, price_unit, state,
+                    product_uom, customer_lead, create_uid, write_uid, create_date, write_date)
+                   VALUES (%s,%s,%s,%s,%s,%s,'sale',%s,0,%s,%s,NOW(),NOW())""",
+                (line_id, order_id, variant_id, name, qty, price,
+                 uom_id, user_id, user_id)
+            )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'order_name': order_name, 'order_id': order_id})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': 'Insert failed', 'details': str(e)}), 500
+
+
+# ── Receipt Scanner Training ──────────────────────────────────
+
+_training_state: dict = {
+    'running': False, 'session_id': None,
+    'total': 0, 'processed': 0, 'skipped': 0, 'failed': 0,
+    'current': '', 'current_image': None,   # b64 thumbnail of current image
+    'started_at': None, 'finished_at': None, 'stopped_at': None,
+    'folder_path': '',
+    # Control flags (set via API, read by background thread)
+    'pause_requested': False, 'stop_requested': False, 'paused': False,
+    'counters': {'scanned': 0, 'receipt_no': 0, 'date_total': 0,
+                 'not_found': 0, 'errors': 0, 'not_receipt': 0},
+    'live_feed': [],       # last 10 lightweight result entries
+    'results': [], 'alias_suggestions': {},
+    # Gemini post-training review
+    'gemini_review_status': None,  # None | 'running' | 'done' | 'error: ...' | 'skipped: ...'
+    'gemini_aliases': [],          # reviewed alias list from Gemini
+}
+_training_lock = threading.Lock()
+_TRAINING_CACHE_FILE = '.pwtraining_cache.json'
+_TRAINING_RUNS_DIR   = os.path.join(os.path.dirname(__file__), 'training_runs')
+os.makedirs(_TRAINING_RUNS_DIR, exist_ok=True)
+
+
+def _training_cache_path(folder_path):
+    return os.path.join(folder_path, _TRAINING_CACHE_FILE)
+
+
+def _load_training_cache(folder_path):
+    """Return dict {filename → raw_ocr_entry} from cache file.
+    Only stores OCR results (is_receipt, receipts_raw) — NOT comparison results,
+    so comparisons are always re-run with the current (updated) catalog/aliases.
+    """
+    try:
+        with open(_training_cache_path(folder_path)) as f:
+            data = json.load(f)
+        if data.get('v') == 2:
+            # v2: ocr-only cache — always safe to use
+            return data.get('results', {})
+        if data.get('v') == 1:
+            # v1: old format stored full comparison results, no receipts_raw.
+            # Only keep entries that have receipts_raw (manually converted).
+            # Others are silently dropped → will re-run through Gemini.
+            return {k: v for k, v in data.get('results', {}).items()
+                    if v.get('receipts_raw') is not None}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_cache_entry(folder_path, filename, entry):
+    """Save only the OCR scan result (not comparison) to cache.
+    Strips comparison data so the cache is catalog-independent.
+    """
+    path = _training_cache_path(folder_path)
+    try:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except Exception:
+            data = {'v': 2, 'results': {}}
+        # Store only what Gemini extracted — strip comparison results
+        ocr_entry = {
+            'file':        entry.get('file'),
+            'status':      entry.get('status'),
+            'reason':      entry.get('reason'),     # for not_receipt
+            'error':       entry.get('error'),       # for error
+            # Store raw receipts with only OCR fields (no comparison)
+            'receipts_raw': [
+                {
+                    'receipt_no':    r.get('receipt_no'),
+                    'date':          r.get('date'),
+                    'total_written': r.get('total_written'),
+                    'items':         r.get('items', []),
+                }
+                for r in entry.get('receipts_raw', [])
+            ],
+        }
+        data['results'][filename] = ocr_entry
+        data['v'] = 2
+        with open(path, 'w') as f:
+            json.dump(data, f, default=str)
+    except Exception:
+        pass
+
+
+def _refresh_price_history(cfg):
+    """Query Odoo for actual sold prices per product, save to price_history.json."""
+    global _price_history
+    try:
+        conn = psycopg2.connect(**cfg)
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT sol.product_id::text AS vid,
+                   MIN(sol.price_unit)  AS p_min,
+                   MAX(sol.price_unit)  AS p_max,
+                   AVG(sol.price_unit)  AS p_mean,
+                   COUNT(*)             AS cnt
+            FROM sale_order_line sol
+            JOIN sale_order so ON so.id = sol.order_id
+            WHERE so.state IN ('sale','done') AND sol.price_unit > 0
+            GROUP BY sol.product_id
+        """)
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        hist = {}
+        for r in rows:
+            hist[r['vid']] = {
+                'min':   round(float(r['p_min']), 2),
+                'max':   round(float(r['p_max']), 2),
+                'mean':  round(float(r['p_mean']), 2),
+                'count': int(r['cnt']),
+            }
+        _price_history = hist
+        with open(_PRICE_HIST_PATH, 'w') as f:
+            json.dump(hist, f, indent=2)
+    except Exception as e:
+        print(f'price_history refresh error: {e}')
+
+
+def _lookup_odoo_receipt(cfg, receipt_no, receipt_date, receipt_total=None):
+    """
+    Return (lines, match_quality) for best-matching Odoo order.
+    match_quality: 'receipt_no' | 'date_total' | 'date_only' | 'none'
+    Priority:
+      1. Receipt # in client_order_ref (Customer Reference field)
+      2. Date + total amount match ±5%  (historical manually-entered orders)
+      3. Date only — returns lines but flags as uncertain
+    """
+    LINE_SQL = """
+        SELECT so.id AS order_id, so.name AS order_name,
+               so.client_order_ref AS customer_ref,
+               so.date_order::date AS sale_date,
+               so.amount_untaxed AS order_total,
+               sol.product_id AS variant_id,
+               pt.name->>'en_US' AS product_name,
+               sol.product_uom_qty AS qty, sol.price_unit
+        FROM sale_order so
+        JOIN sale_order_line sol ON sol.order_id = so.id
+        JOIN product_product pp  ON pp.id = sol.product_id
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        WHERE {where} AND so.state IN ('sale','done')
+        ORDER BY so.date_order DESC
+    """
+    try:
+        conn = psycopg2.connect(**cfg)
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # ── 1. Receipt number match via Customer Reference field ──
+        if receipt_no:
+            cur.execute(LINE_SQL.format(where="so.client_order_ref ILIKE %s"),
+                        (f'%{receipt_no}%',))
+            rows = [dict(r) for r in cur.fetchall()]
+            if rows:
+                cur.close(); conn.close()
+                return rows, 'receipt_no'
+
+        # ── 2. Date + total amount match ───────────────────────
+        if receipt_date and receipt_total and receipt_total > 0:
+            # Get candidate orders on that date
+            cur.execute("""
+                SELECT id, name, amount_untaxed
+                FROM sale_order
+                WHERE date_order::date = %s AND state IN ('sale','done')
+            """, (receipt_date,))
+            candidates = cur.fetchall()
+            best_order_id = None
+            best_diff     = float('inf')
+            for c in candidates:
+                amt = float(c['amount_untaxed'] or 0)
+                if amt > 0:
+                    diff = abs(amt - receipt_total) / receipt_total
+                    if diff < 0.05 and diff < best_diff:  # within 5%
+                        best_diff     = diff
+                        best_order_id = c['id']
+            if best_order_id:
+                cur.execute(LINE_SQL.format(where="so.id = %s"),
+                            (best_order_id,))
+                rows = [dict(r) for r in cur.fetchall()]
+                if rows:
+                    cur.close(); conn.close()
+                    return rows, 'date_total'
+
+        # ── 3. Date only — uncertain, may be multiple orders ───
+        if receipt_date:
+            cur.execute(LINE_SQL.format(where="so.date_order::date = %s") + " LIMIT 80",
+                        (receipt_date,))
+            rows = [dict(r) for r in cur.fetchall()]
+            cur.close(); conn.close()
+            return rows, 'date_only' if rows else 'none'
+
+        cur.close(); conn.close()
+    except Exception as e:
+        print(f'odoo lookup error: {e}')
+    return [], 'none'
+
+
+def _compare_receipt(scanned_items, odoo_lines):
+    """Compare scanner extracted items vs Odoo ground truth. Returns comparison list."""
+    comparison = []
+    odoo_used  = set()
+
+    for item in scanned_items:
+        raw   = item.get('raw_text', '') or ''
+        try:
+            qty = float(item.get('qty') or 1)
+        except (TypeError, ValueError):
+            qty = 1.0
+        try:
+            total = float(item.get('line_total')) if item.get('line_total') is not None else None
+        except (TypeError, ValueError):
+            total = None
+        unit  = (total / qty) if total and qty else None
+
+        fm         = _fuzzy_match_item(raw, qty, total)
+        scanner_id = fm['product']['id'] if fm['product'] else None
+
+        # Find best Odoo match — first by product_id, then by price
+        odoo_match = None
+        match_type = 'none'
+        for i, ol in enumerate(odoo_lines):
+            if i in odoo_used: continue
+            if scanner_id and ol['variant_id'] == scanner_id:
+                odoo_match = ol; match_type = 'product'; odoo_used.add(i); break
+        if not odoo_match and unit:
+            for i, ol in enumerate(odoo_lines):
+                if i in odoo_used: continue
+                ol_price = float(ol['price_unit'] or 0)
+                if ol_price > 0 and abs(ol_price - unit) / ol_price < 0.20:
+                    odoo_match = ol; match_type = 'price'; odoo_used.add(i); break
+
+        if odoo_match and scanner_id and scanner_id == odoo_match['variant_id']:
+            result = 'correct'
+        elif odoo_match:
+            result = 'wrong_product'  # alias opportunity
+        else:
+            result = 'no_odoo'
+
+        comparison.append({
+            'raw_text':  raw,
+            'qty':       qty,
+            'line_total': total,
+            'scanner':   {'variant_id': scanner_id,
+                          'name': fm['product']['name'] if fm['product'] else None,
+                          'confidence': fm['confidence'], 'score': fm['score']},
+            'odoo':      {'variant_id': odoo_match['variant_id'] if odoo_match else None,
+                          'name': odoo_match['product_name'] if odoo_match else None,
+                          'price': float(odoo_match['price_unit']) if odoo_match else None,
+                          'match_type': match_type},
+            'result':    result,
+        })
+
+    # Odoo lines not matched by scanner — missed items
+    for i, ol in enumerate(odoo_lines):
+        if i not in odoo_used:
+            comparison.append({
+                'raw_text': None, 'qty': float(ol['qty'] or 1), 'line_total': None,
+                'scanner': None,
+                'odoo': {'variant_id': ol['variant_id'], 'name': ol['product_name'],
+                         'price': float(ol['price_unit'] or 0), 'match_type': 'missed'},
+                'result': 'missed',
+            })
+    return comparison
+
+
+def _make_thumbnail(img_bytes, max_w=300, max_h=420, quality=55):
+    """Return base64 JPEG thumbnail string, or None on failure."""
+    try:
+        import PIL.Image as _PILImage
+        img = _PILImage.open(_io.BytesIO(img_bytes))
+        img.thumbnail((max_w, max_h), _PILImage.LANCZOS)
+        buf = _io.BytesIO()
+        img.convert('RGB').save(buf, format='JPEG', quality=quality)
+        return _base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return None
+
+
+def _save_run_record(state, session_id, stopped=False):
+    """Save a compact run record to training_runs/ for history comparison."""
+    try:
+        results  = state.get('results', [])
+        all_comp = [c for r in results if r.get('status') == 'scanned'
+                      for rec in r.get('receipts', []) for c in rec.get('comparison', [])]
+        correct  = sum(1 for c in all_comp if c['result'] == 'correct')
+        total_c  = len([c for c in all_comp if c['result'] != 'missed'])
+        record = {
+            'session_id':      session_id,
+            'folder':          state.get('folder_path', ''),
+            'started_at':      state.get('started_at'),
+            'finished_at':     state.get('finished_at') or state.get('stopped_at'),
+            'stopped':         stopped,
+            'total_images':    state.get('total', 0),
+            'processed':       state.get('processed', 0),
+            'skipped':         state.get('skipped', 0),
+            'summary': {
+                'receipts_scanned': sum(1 for r in results if r.get('status') == 'scanned'),
+                'not_receipts':     sum(1 for r in results if r.get('status') == 'not_receipt'),
+                'errors':           sum(1 for r in results if r.get('status') == 'error'),
+                'total_items':      total_c,
+                'correct':          correct,
+                'accuracy':         round(correct / total_c * 100, 1) if total_c else 0,
+                'alias_suggestions': len(state.get('alias_suggestions', {})),
+            },
+            'counters': state.get('counters', {}),
+        }
+        path = os.path.join(_TRAINING_RUNS_DIR, f'{session_id}.json')
+        with open(path, 'w') as f:
+            json.dump(record, f, default=str, indent=2)
+    except Exception as e:
+        print(f'_save_run_record error: {e}')
+
+
+def _run_training(folder_path, session_id, db_cfg, resume=False):
+    """Background thread: scan all images, compare to Odoo, collect alias suggestions."""
+    import PIL.Image
+    supported = {'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.bmp'}
+    images    = sorted([
+        os.path.join(folder_path, fn) for fn in os.listdir(folder_path)
+        if os.path.splitext(fn.lower())[1] in supported
+    ])
+    api_key = os.getenv('GEMINI_API_KEY', '')
+
+    # Load cache for resume — cache contains only raw OCR results (no comparison)
+    # Comparison is ALWAYS re-run fresh so new aliases take effect every run
+    ocr_cache = _load_training_cache(folder_path) if resume else {}
+
+    with _training_lock:
+        _training_state.update({
+            'total': len(images),
+            'processed': 0,
+            'skipped': 0,
+            'failed': 0,
+            'results': [],
+            'alias_suggestions': {},
+            'counters': {'scanned': 0, 'receipt_no': 0, 'date_total': 0,
+                         'not_found': 0, 'errors': 0, 'not_receipt': 0},
+            'live_feed': [],
+            'current': '', 'current_image': None,
+            'folder_path': folder_path,
+        })
+
+    def _process_receipts_raw(fn, receipts_raw, db_cfg):
+        """Run comparison on raw OCR output, collect alias suggestions. Returns receipt_results list."""
+        receipt_results = []
+        for receipt in receipts_raw:
+            receipt_no    = receipt.get('receipt_no')
+            receipt_date  = receipt.get('date')
+            receipt_total = receipt.get('total_written')
+            items         = receipt.get('items', [])
+            odoo_lines, match_quality = _lookup_odoo_receipt(
+                db_cfg, receipt_no, receipt_date, receipt_total)
+            comparison = _compare_receipt(items, odoo_lines)
+
+            correct = sum(1 for c in comparison if c['result'] == 'correct')
+            total_c = len([c for c in comparison if c['result'] != 'missed'])
+
+            # Collect alias suggestions from wrong_product results
+            with _training_lock:
+                for c in comparison:
+                    if c['result'] == 'wrong_product' and c['raw_text'] and c['odoo']['variant_id']:
+                        key = f"{c['raw_text'].strip().lower()}|{c['odoo']['variant_id']}"
+                        s   = _training_state['alias_suggestions']
+                        if key not in s:
+                            s[key] = {'raw_text': c['raw_text'].strip(),
+                                      'variant_id': c['odoo']['variant_id'],
+                                      'product_name': c['odoo']['name'],
+                                      'count': 0, 'files': []}
+                        s[key]['count'] += 1
+                        if fn not in s[key]['files']:
+                            s[key]['files'].append(fn)
+
+            receipt_results.append({
+                'receipt_no':    receipt_no,
+                'date':          receipt_date,
+                'odoo_found':    bool(odoo_lines),
+                'odoo_order':    odoo_lines[0]['order_name'] if odoo_lines else None,
+                'match_quality': match_quality,
+                'total_items':   total_c,
+                'correct':       correct,
+                'accuracy':      round(correct / total_c, 3) if total_c else None,
+                'comparison':    comparison,
+            })
+        return receipt_results
+
+    for img_path in images:
+        fn = os.path.basename(img_path)
+
+        # ── If OCR is cached, skip Gemini call but ALWAYS re-run comparison ──
+        if fn in ocr_cache:
+            cached = ocr_cache[fn]
+            cached_status = cached.get('status')
+
+            if cached_status == 'not_receipt':
+                entry = {'file': fn, 'status': 'not_receipt',
+                         'reason': cached.get('reason', ''), 'receipts': []}
+                with _training_lock:
+                    _training_state['results'].append(entry)
+                    _training_state['processed'] += 1
+                    _training_state['skipped'] += 1
+                    _training_state['counters']['not_receipt'] += 1
+                    _training_state['live_feed'] = [_feed_entry(entry)] + _training_state['live_feed'][:9]
+                continue
+
+            if cached_status == 'error':
+                entry = {'file': fn, 'status': 'error',
+                         'error': cached.get('error', ''), 'receipts': []}
+                with _training_lock:
+                    _training_state['results'].append(entry)
+                    _training_state['failed'] += 1
+                    _training_state['processed'] += 1
+                    _training_state['skipped'] += 1
+                    _training_state['counters']['errors'] += 1
+                    _training_state['live_feed'] = [_feed_entry(entry)] + _training_state['live_feed'][:9]
+                continue
+
+            if cached_status == 'scanned':
+                # Re-run comparison with current catalog (aliases may have changed)
+                receipts_raw_cached = cached.get('receipts_raw', [])
+                receipt_results = _process_receipts_raw(fn, receipts_raw_cached, db_cfg)
+                entry = {'file': fn, 'status': 'scanned', 'receipts': receipt_results}
+                with _training_lock:
+                    _training_state['results'].append(entry)
+                    _training_state['processed'] += 1
+                    _training_state['skipped'] += 1
+                    _training_state['counters']['scanned'] += 1
+                    for rec in receipt_results:
+                        mq = rec.get('match_quality', 'none')
+                        if mq == 'receipt_no':
+                            _training_state['counters']['receipt_no'] += 1
+                        elif mq == 'date_total':
+                            _training_state['counters']['date_total'] += 1
+                        elif not rec.get('odoo_found'):
+                            _training_state['counters']['not_found'] += 1
+                    _training_state['live_feed'] = [_feed_entry(entry)] + _training_state['live_feed'][:9]
+                continue
+
+        # ── Not cached: run Gemini OCR ───────────────────────────
+
+        # Generate thumbnail for UI preview
+        try:
+            img_bytes = open(img_path, 'rb').read()
+        except Exception as e:
+            with _training_lock:
+                entry = {'file': fn, 'status': 'error', 'error': str(e), 'receipts': []}
+                _training_state['results'].append(entry)
+                _training_state['failed'] += 1
+                _training_state['processed'] += 1
+                _training_state['counters']['errors'] += 1
+                _training_state['live_feed'] = [_feed_entry(entry)] + _training_state['live_feed'][:9]
+            _save_cache_entry(folder_path, fn, {'file': fn, 'status': 'error', 'error': str(e), 'receipts_raw': []})
+            continue
+
+        thumb_b64 = _make_thumbnail(img_bytes)
+
+        with _training_lock:
+            _training_state['current']       = fn
+            _training_state['current_image'] = thumb_b64
+
+        # ── Pause / stop check ──────────────────────────────────
+        import time as _time
+        while True:
+            with _training_lock:
+                stop  = _training_state.get('stop_requested', False)
+                pause = _training_state.get('pause_requested', False)
+            if stop:
+                break
+            if pause:
+                with _training_lock:
+                    _training_state['paused'] = True
+                _time.sleep(0.5)
+                continue
+            with _training_lock:
+                _training_state['paused'] = False
+            break
+
+        with _training_lock:
+            if _training_state.get('stop_requested'):
+                break
+
+        try:
+            image_b64 = _base64.b64encode(img_bytes).decode()
+            ocr       = _run_ocr(image_b64)
+
+            if ocr.get('is_receipt') is False:
+                entry = {'file': fn, 'status': 'not_receipt',
+                         'reason': ocr.get('reason', ''), 'receipts': []}
+                with _training_lock:
+                    _training_state['results'].append(entry)
+                    _training_state['processed'] += 1
+                    _training_state['counters']['not_receipt'] += 1
+                    _training_state['live_feed'] = [_feed_entry(entry)] + _training_state['live_feed'][:9]
+                _save_cache_entry(folder_path, fn, {'file': fn, 'status': 'not_receipt',
+                                                    'reason': ocr.get('reason', ''), 'receipts_raw': []})
+                continue
+
+            pil_img      = PIL.Image.open(_io.BytesIO(img_bytes))
+            receipts_raw = _call_gemini(pil_img, _prompt_extract_only()) if api_key else []
+
+            # Save OCR results to cache (catalog-independent)
+            _save_cache_entry(folder_path, fn, {'file': fn, 'status': 'scanned',
+                                                 'receipts_raw': receipts_raw})
+
+            receipt_results = _process_receipts_raw(fn, receipts_raw, db_cfg)
+            entry = {'file': fn, 'status': 'scanned', 'receipts': receipt_results}
+            with _training_lock:
+                _training_state['results'].append(entry)
+                _training_state['processed'] += 1
+                _training_state['counters']['scanned'] += 1
+                # Update match quality counters
+                for rec in receipt_results:
+                    mq = rec.get('match_quality', 'none')
+                    if mq == 'receipt_no':
+                        _training_state['counters']['receipt_no'] += 1
+                    elif mq == 'date_total':
+                        _training_state['counters']['date_total'] += 1
+                    elif not rec.get('odoo_found'):
+                        _training_state['counters']['not_found'] += 1
+                _training_state['live_feed'] = [_feed_entry(entry)] + _training_state['live_feed'][:9]
+
+        except Exception as e:
+            entry = {'file': fn, 'status': 'error', 'error': str(e), 'receipts': []}
+            with _training_lock:
+                _training_state['results'].append(entry)
+                _training_state['failed'] += 1
+                _training_state['processed'] += 1
+                _training_state['counters']['errors'] += 1
+                _training_state['live_feed'] = [_feed_entry(entry)] + _training_state['live_feed'][:9]
+            _save_cache_entry(folder_path, fn, {'file': fn, 'status': 'error',
+                                                 'error': str(e), 'receipts_raw': []})
+
+    # Clear current image
+    with _training_lock:
+        _training_state['current_image']   = None
+        _training_state['current']         = ''
+        _training_state['paused']          = False
+        was_stopped = _training_state.get('stop_requested', False)
+
+    if was_stopped:
+        with _training_lock:
+            _training_state['running']     = False
+            _training_state['stopped_at']  = _dt.now().isoformat()
+            _training_state['stop_requested'] = False
+        _save_run_record(_training_state, session_id, stopped=True)
+        return   # Don't refresh price history on manual stop
+
+    # Refresh price history from Odoo after a full run
+    try:
+        _refresh_price_history(db_cfg)
+    except Exception:
+        pass
+
+    with _training_lock:
+        _training_state['running']     = False
+        _training_state['finished_at'] = _dt.now().isoformat()
+        save_path = os.path.join(os.path.dirname(__file__), f'training_{session_id}.json')
+        try:
+            with open(save_path, 'w') as f:
+                json.dump(_training_state, f, default=str, indent=2)
+        except Exception:
+            pass
+        _save_run_record(_training_state, session_id, stopped=False)
+
+    # ── Auto Gemini alias review ──────────────────────────────
+    try:
+        _gemini_review_aliases()
+    except Exception as e:
+        print(f'gemini alias review error: {e}')
+        with _training_lock:
+            _training_state['gemini_review_status'] = f'error: {e}'
+
+
+def _gemini_review_thread():
+    """Wrapper for running _gemini_review_aliases in a background thread."""
+    try:
+        _gemini_review_aliases()
+    except Exception as e:
+        print(f'gemini review thread error: {e}')
+        with _training_lock:
+            _training_state['gemini_review_status'] = f'error: {e}'
+
+
+def _gemini_review_aliases():
+    """
+    After training, ask Gemini to review all wrong_product pairs and decide:
+    - Which aliases are confident (clear handwriting variation / abbreviation)
+    - Which are uncertain (need human judgment)
+    Stores results in _training_state['gemini_aliases'].
+    """
+    import google.generativeai as genai
+
+    api_key = os.getenv('GEMINI_API_KEY', '')
+    if not api_key:
+        with _training_lock:
+            _training_state['gemini_review_status'] = 'skipped: no API key'
+        return
+
+    with _training_lock:
+        _training_state['gemini_review_status'] = 'running'
+        suggestions = dict(_training_state.get('alias_suggestions', {}))
+
+    if not suggestions:
+        with _training_lock:
+            _training_state['gemini_review_status'] = 'done'
+            _training_state['gemini_aliases'] = []
+        return
+
+    # Build compact catalog for context
+    catalog_compact = _catalog_compact()
+
+    # Build the pairs list — aggregate by raw_text, collect all candidate products
+    # Group by raw_text to handle same raw → multiple candidate products
+    raw_to_candidates: dict = {}
+    for key, s in suggestions.items():
+        raw = s['raw_text'].strip()
+        if raw not in raw_to_candidates:
+            raw_to_candidates[raw] = []
+        raw_to_candidates[raw].append({
+            'variant_id':   s['variant_id'],
+            'product_name': s['product_name'],
+            'count':        s['count'],
+            'key':          key,
+        })
+
+    # Build prompt items (cap at 200 to avoid token limits)
+    items = []
+    for raw, candidates in list(raw_to_candidates.items())[:200]:
+        # Pick highest-count candidate as primary suggestion
+        best = max(candidates, key=lambda c: c['count'])
+        items.append({
+            'raw_text':       raw,
+            'suggested_id':   best['variant_id'],
+            'suggested_name': best['product_name'],
+            'seen_count':     sum(c['count'] for c in candidates),
+            'alt_candidates': [
+                {'variant_id': c['variant_id'], 'name': c['product_name']}
+                for c in candidates if c['variant_id'] != best['variant_id']
+            ][:3],
+        })
+
+    prompt = f"""You are a product alias expert for Party World Shop, Nairobi — a party supplies retailer.
+Staff write product names by hand on receipts using abbreviations, codes, and shorthand.
+Your job: review each handwritten text and decide if it should be added as an alias to the catalog.
+
+Catalog (id|name|code|price|existing_aliases):
+{catalog_compact}
+
+Review these {len(items)} handwritten texts. For each, decide:
+1. The CORRECT product match (variant_id) — may differ from suggested
+2. Confidence: HIGH (obvious abbreviation/typo/code) | MEDIUM (likely but not certain) | LOW (guess) | REJECT (wrong match, do not add)
+
+Key context:
+- SHORT CODES like "HM-F", "HM-Fx", "HM-F1", "Hn-Fx" → all mean HM-FX product
+- "xy", "Xy", "XY", "xly", "Ty", "vy", "LYU" → XY-Florescent Stickers  
+- "45-Sm", "45-SM", "45 SM", "4S-Sm", "45-5m", "45-5", "45-2M", "MS-BRA SM" → Contact Paper products
+- "baloon", "Baloon", "balooon" → balloon typos (check candidate name)
+- "Cartoon Cup", "Cartoon CUPS" → Cartoon Cups product
+- "gold Candle", "Gold Candle" → Gold Number Candles
+- "FOIL number (32)", "FOLL number (32)" → 32 Inch Number Foil
+- REJECT if the suggested product makes no semantic sense (e.g. "baloon tape" → Contact Paper is wrong)
+- REJECT if raw_text is too ambiguous to confidently assign (e.g. single letter like "XE", "XF")
+
+Return ONLY valid JSON array, one object per item in the same order:
+[{{"raw_text":"exact input text","variant_id":number_or_null,"product_name":"name or null",
+"confidence":"HIGH|MEDIUM|LOW|REJECT","reason":"one line explanation"}}]"""
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-2.0-flash')
+
+    # Split into batches of 50 to stay within token limits
+    batch_size = 50
+    all_results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        batch_prompt = prompt.replace(f"these {len(items)} handwritten texts",
+                                      f"these {len(batch)} handwritten texts")
+        batch_json   = json.dumps(batch, ensure_ascii=False)
+        try:
+            result   = model.generate_content([batch_json, batch_prompt])
+            raw      = (result.text or '').replace('```json', '').replace('```', '').strip()
+            parsed   = json.loads(raw)
+            all_results.extend(parsed if isinstance(parsed, list) else [parsed])
+        except Exception as e:
+            # On batch failure, mark all as LOW
+            for item in batch:
+                all_results.append({
+                    'raw_text':    item['raw_text'],
+                    'variant_id':  item['suggested_id'],
+                    'product_name': item['suggested_name'],
+                    'confidence':  'LOW',
+                    'reason':      f'batch error: {e}',
+                })
+
+    # Merge results back with original suggestion keys
+    raw_to_key = {}
+    for key, s in suggestions.items():
+        raw_to_key[s['raw_text'].strip()] = key
+
+    gemini_aliases = []
+    for res in all_results:
+        raw  = (res.get('raw_text') or '').strip()
+        conf = res.get('confidence', 'LOW')
+        vid  = res.get('variant_id')
+        if conf == 'REJECT' or not vid:
+            gemini_aliases.append({
+                'raw_text':    raw,
+                'variant_id':  None,
+                'product_name': res.get('product_name'),
+                'confidence':  'REJECT',
+                'reason':      res.get('reason', ''),
+                'action':      'reject',   # pre-set action
+                'key':         raw_to_key.get(raw, raw),
+                'count':       raw_to_candidates.get(raw, [{}])[0].get('count', 1)
+                               if raw in raw_to_candidates else 1,
+            })
+        else:
+            # Find the original count
+            orig_count = sum(
+                c['count'] for c in raw_to_candidates.get(raw, [])
+            ) or 1
+            gemini_aliases.append({
+                'raw_text':    raw,
+                'variant_id':  vid,
+                'product_name': res.get('product_name', ''),
+                'confidence':  conf,
+                'reason':      res.get('reason', ''),
+                'action':      'add' if conf == 'HIGH' else 'pending',
+                'key':         raw_to_key.get(raw, raw),
+                'count':       orig_count,
+            })
+
+    # Sort: HIGH first, then MEDIUM, then LOW, then REJECT
+    order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2, 'REJECT': 3}
+    gemini_aliases.sort(key=lambda x: (order.get(x['confidence'], 4), -x.get('count', 0)))
+
+    # ── Auto-apply HIGH and MEDIUM confidence aliases to products.md ──
+    auto_added = 0
+    auto_errors = []
+    try:
+        with open(_PRODUCTS_MD_PATH) as f:
+            lines = f.readlines()
+        new_lines = list(lines)
+        for a in gemini_aliases:
+            conf = a.get('confidence')
+            if conf not in ('HIGH', 'MEDIUM'):
+                continue
+            raw_text   = (a.get('raw_text') or '').strip()
+            variant_id = a.get('variant_id')
+            if not raw_text or not variant_id:
+                continue
+            updated = False
+            for idx, line in enumerate(new_lines):
+                if line.startswith('|') and '---' not in line and 'variant_id' not in line:
+                    cols = line.rstrip('\n').split('|')
+                    if len(cols) >= 6:
+                        try:
+                            if int(cols[1].strip()) == int(variant_id):
+                                existing = cols[5].strip()
+                                if raw_text.lower() not in existing.lower():
+                                    sep     = ', ' if existing else ''
+                                    cols[5] = f' {existing}{sep}{raw_text} '
+                                new_lines[idx] = '|'.join(cols) + '\n'
+                                updated = True
+                                break
+                        except Exception:
+                            pass
+            if updated:
+                a['action'] = 'added'
+                auto_added += 1
+            else:
+                auto_errors.append(raw_text)
+        with open(_PRODUCTS_MD_PATH, 'w') as f:
+            f.writelines(new_lines)
+        _load_catalog()
+    except Exception as e:
+        auto_errors.append(str(e))
+
+    with _training_lock:
+        _training_state['gemini_aliases']          = gemini_aliases
+        _training_state['gemini_review_status']    = 'done'
+        _training_state['gemini_auto_added']       = auto_added
+        _training_state['gemini_auto_errors']      = auto_errors
+
+
+def _feed_entry(entry):
+    """Lightweight summary of a result entry for the live feed."""
+    if entry['status'] == 'scanned' and entry.get('receipts'):
+        rec = entry['receipts'][0]
+        return {
+            'file': entry['file'], 'status': 'scanned',
+            'receipt_no': rec.get('receipt_no'), 'date': rec.get('date'),
+            'odoo_found': rec.get('odoo_found'), 'odoo_order': rec.get('odoo_order'),
+            'match_quality': rec.get('match_quality', 'none'),
+            'total_items': rec.get('total_items', 0), 'correct': rec.get('correct', 0),
+            'accuracy': rec.get('accuracy'),
+        }
+    return {'file': entry['file'], 'status': entry['status'],
+            'error': entry.get('error', ''), 'reason': entry.get('reason', '')}
+
+
+@app.route('/receipts/training')
+@login_required
+def receipts_training():
+    return render_template('receipts_training.html', **date_filter_context())
+
+
+@app.route('/api/receipts/training/start', methods=['POST'])
+@login_required
+def training_start():
+    data        = request.get_json() or {}
+    folder_path = data.get('folder', '').strip()
+    resume      = bool(data.get('resume', False))
+
+    if not folder_path or not os.path.isdir(folder_path):
+        return jsonify({'error': f'Folder not found: {folder_path}'}), 400
+
+    with _training_lock:
+        if _training_state['running']:
+            return jsonify({'error': 'Training already running'}), 409
+        session_id = _dt.now().strftime('%Y%m%d_%H%M%S')
+        _training_state.update({
+            'running': True, 'session_id': session_id,
+            'started_at': _dt.now().isoformat(), 'finished_at': None,
+        })
+
+    # Check how many files are already cached
+    cached_count = len(_load_training_cache(folder_path)) if resume else 0
+
+    db_cfg = get_active_db_config()
+    t = threading.Thread(target=_run_training,
+                         args=(folder_path, session_id, db_cfg),
+                         kwargs={'resume': resume}, daemon=True)
+    t.start()
+    return jsonify({'session_id': session_id, 'folder': folder_path,
+                    'resume': resume, 'cached': cached_count})
+
+
+@app.route('/api/receipts/training/pause', methods=['POST'])
+@login_required
+def training_pause():
+    with _training_lock:
+        if not _training_state['running']:
+            return jsonify({'error': 'Not running'}), 400
+        _training_state['pause_requested'] = True
+    return jsonify({'ok': True, 'status': 'pausing'})
+
+
+@app.route('/api/receipts/training/resume-thread', methods=['POST'])
+@login_required
+def training_resume_thread():
+    with _training_lock:
+        _training_state['pause_requested'] = False
+        _training_state['paused']          = False
+    return jsonify({'ok': True, 'status': 'resumed'})
+
+
+@app.route('/api/receipts/training/stop', methods=['POST'])
+@login_required
+def training_stop():
+    with _training_lock:
+        if not _training_state['running']:
+            return jsonify({'error': 'Not running'}), 400
+        _training_state['stop_requested'] = True
+        _training_state['pause_requested'] = False  # unblock if paused
+    return jsonify({'ok': True, 'status': 'stopping'})
+
+
+@app.route('/api/receipts/training/gemini-review')
+@login_required
+def training_gemini_review():
+    """Return Gemini-reviewed alias list + current review status."""
+    with _training_lock:
+        status     = _training_state.get('gemini_review_status')
+        aliases    = list(_training_state.get('gemini_aliases', []))
+        auto_added = _training_state.get('gemini_auto_added', 0)
+    return jsonify({'status': status, 'aliases': aliases, 'auto_added': auto_added})
+
+
+@app.route('/api/receipts/training/gemini-review/run', methods=['POST'])
+@login_required
+def training_gemini_review_run():
+    """Manually trigger a Gemini alias review of the current training results."""
+    with _training_lock:
+        if _training_state.get('running'):
+            return jsonify({'error': 'Training is still running'}), 409
+        if not _training_state.get('alias_suggestions'):
+            return jsonify({'error': 'No alias suggestions found — run training first'}), 400
+        if _training_state.get('gemini_review_status') == 'running':
+            return jsonify({'ok': True, 'status': 'already running'})
+        _training_state['gemini_review_status'] = 'running'
+        _training_state['gemini_aliases']       = []
+        _training_state['gemini_auto_added']    = 0
+        _training_state['gemini_auto_errors']   = []
+
+    t = threading.Thread(target=_gemini_review_thread, daemon=True)
+    t.start()
+    return jsonify({'ok': True, 'status': 'started'})
+
+
+@app.route('/api/receipts/training/gemini-review/apply', methods=['POST'])
+@login_required
+def training_gemini_review_apply():
+    """Apply one Gemini alias decision: add or reject."""
+    data       = request.get_json() or {}
+    raw_text   = (data.get('raw_text') or '').strip()
+    variant_id = data.get('variant_id')
+    action     = data.get('action', 'add')   # 'add' | 'reject'
+
+    if action == 'reject' or not variant_id:
+        # Just mark as actioned in state
+        with _training_lock:
+            for a in _training_state.get('gemini_aliases', []):
+                if a.get('raw_text') == raw_text:
+                    a['action'] = 'rejected'
+                    break
+        return jsonify({'ok': True, 'action': 'rejected'})
+
+    try:
+        variant_id = int(variant_id)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid variant_id'}), 400
+
+    # Reuse the existing add_alias logic
+    try:
+        with open(_PRODUCTS_MD_PATH) as f:
+            lines = f.readlines()
+        updated   = False
+        new_lines = []
+        for line in lines:
+            if (line.startswith('|') and '---' not in line and 'variant_id' not in line):
+                cols = line.rstrip('\n').split('|')
+                if len(cols) >= 6:
+                    try:
+                        if int(cols[1].strip()) == variant_id:
+                            existing = cols[5].strip()
+                            if raw_text.lower() not in existing.lower():
+                                sep      = ', ' if existing else ''
+                                cols[5]  = f' {existing}{sep}{raw_text} '
+                            line    = '|'.join(cols) + '\n'
+                            updated = True
+                    except Exception:
+                        pass
+            new_lines.append(line)
+        if not updated:
+            return jsonify({'error': f'Product {variant_id} not found in catalog'}), 404
+        with open(_PRODUCTS_MD_PATH, 'w') as f:
+            f.writelines(new_lines)
+        _load_catalog()
+        # Mark as added in state
+        with _training_lock:
+            for a in _training_state.get('gemini_aliases', []):
+                if a.get('raw_text') == raw_text:
+                    a['action'] = 'added'
+                    break
+        return jsonify({'ok': True, 'action': 'added', 'catalog_size': len(_CATALOG)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/receipts/training/gemini-review/apply-all', methods=['POST'])
+@login_required
+def training_gemini_review_apply_all():
+    """Apply all HIGH-confidence Gemini aliases at once."""
+    with _training_lock:
+        aliases = list(_training_state.get('gemini_aliases', []))
+
+    added = 0; skipped = 0; errors = []
+    try:
+        with open(_PRODUCTS_MD_PATH) as f:
+            lines = f.readlines()
+        new_lines = list(lines)
+
+        for a in aliases:
+            if a.get('confidence') != 'HIGH' or a.get('action') == 'added':
+                skipped += 1
+                continue
+            raw_text   = (a.get('raw_text') or '').strip()
+            variant_id = a.get('variant_id')
+            if not raw_text or not variant_id:
+                skipped += 1
+                continue
+            updated = False
+            for idx, line in enumerate(new_lines):
+                if (line.startswith('|') and '---' not in line and 'variant_id' not in line):
+                    cols = line.rstrip('\n').split('|')
+                    if len(cols) >= 6:
+                        try:
+                            if int(cols[1].strip()) == int(variant_id):
+                                existing = cols[5].strip()
+                                if raw_text.lower() not in existing.lower():
+                                    sep      = ', ' if existing else ''
+                                    cols[5]  = f' {existing}{sep}{raw_text} '
+                                new_lines[idx] = '|'.join(cols) + '\n'
+                                updated = True
+                                break
+                        except Exception:
+                            pass
+            if updated:
+                added += 1
+                with _training_lock:
+                    for ga in _training_state.get('gemini_aliases', []):
+                        if ga.get('raw_text') == raw_text:
+                            ga['action'] = 'added'
+                            break
+            else:
+                errors.append(raw_text)
+                skipped += 1
+
+        with open(_PRODUCTS_MD_PATH, 'w') as f:
+            f.writelines(new_lines)
+        _load_catalog()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify({'ok': True, 'added': added, 'skipped': skipped,
+                    'errors': errors, 'catalog_size': len(_CATALOG)})
+
+
+@app.route('/api/receipts/training/clear-cache', methods=['POST'])
+@login_required
+def training_clear_cache():
+    data        = request.get_json() or {}
+    folder_path = data.get('folder', '').strip()
+    if not folder_path or not os.path.isdir(folder_path):
+        return jsonify({'error': 'Folder not found'}), 400
+    path = _training_cache_path(folder_path)
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/receipts/training/cache-info')
+@login_required
+def training_cache_info():
+    folder_path = request.args.get('folder', '').strip()
+    if not folder_path or not os.path.isdir(folder_path):
+        return jsonify({'count': 0})
+    cache = _load_training_cache(folder_path)
+    return jsonify({'count': len(cache), 'folder': folder_path})
+
+
+@app.route('/api/receipts/training/status')
+@login_required
+def training_status():
+    with _training_lock:
+        state = dict(_training_state)
+    # Compute summary stats from results list
+    results  = state.get('results', [])
+    all_comp = [c for r in results if r.get('status') == 'scanned'
+                  for rec in r.get('receipts', []) for c in rec.get('comparison', [])]
+    correct  = sum(1 for c in all_comp if c['result'] == 'correct')
+    total_c  = len([c for c in all_comp if c['result'] != 'missed'])
+
+    # ETA calculation
+    eta_secs = None
+    started  = state.get('started_at')
+    if started and state.get('running'):
+        try:
+            elapsed   = (_dt.now() - _dt.fromisoformat(started)).total_seconds()
+            done      = (state.get('processed', 0) - state.get('skipped', 0))
+            remaining = state.get('total', 0) - state.get('processed', 0)
+            if done > 0 and remaining > 0:
+                rate     = done / elapsed          # files per second
+                eta_secs = int(remaining / rate)
+        except Exception:
+            pass
+
+    state['summary'] = {
+        'receipts_scanned': sum(1 for r in results if r.get('status') == 'scanned'),
+        'not_receipts':     sum(1 for r in results if r.get('status') == 'not_receipt'),
+        'errors':           sum(1 for r in results if r.get('status') == 'error'),
+        'total_items':      total_c,
+        'correct':          correct,
+        'accuracy':         round(correct / total_c * 100, 1) if total_c else 0,
+        'alias_suggestions': len(state.get('alias_suggestions', {})),
+    }
+    state['eta_secs'] = eta_secs
+    # Strip heavy comparison data — detail endpoint has full data
+    state['results'] = [
+        {'file': r['file'], 'status': r['status'],
+         'receipts': [{'receipt_no': rec['receipt_no'], 'date': rec['date'],
+                       'odoo_found': rec['odoo_found'], 'odoo_order': rec.get('odoo_order'),
+                       'match_quality': rec.get('match_quality', 'none'),
+                       'total_items': rec['total_items'], 'correct': rec['correct'],
+                       'accuracy': rec['accuracy']}
+                      for rec in r.get('receipts', [])],
+         'reason': r.get('reason', ''), 'error': r.get('error', '')}
+        for r in results
+    ]
+    return jsonify(state)
+
+
+@app.route('/api/receipts/training/detail/<path:filename>')
+@login_required
+def training_detail(filename):
+    """Return full comparison for a single receipt file."""
+    with _training_lock:
+        for r in _training_state.get('results', []):
+            if r.get('file') == filename:
+                return jsonify(r)
+    return jsonify({'error': 'Not found'}), 404
+
+
+@app.route('/api/receipts/training/history')
+@login_required
+def training_history():
+    """Return list of all past training run summaries, newest first."""
+    runs = []
+    try:
+        for fname in sorted(os.listdir(_TRAINING_RUNS_DIR), reverse=True):
+            if fname.endswith('.json'):
+                try:
+                    with open(os.path.join(_TRAINING_RUNS_DIR, fname)) as f:
+                        runs.append(json.load(f))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return jsonify(runs)
+
+
+@app.route('/api/receipts/training/history/compare')
+@login_required
+def training_history_compare():
+    """Return last N runs as compact comparison rows."""
+    n = min(int(request.args.get('n', 10)), 50)
+    runs = []
+    try:
+        files = sorted(os.listdir(_TRAINING_RUNS_DIR), reverse=True)[:n]
+        for fname in files:
+            if fname.endswith('.json'):
+                try:
+                    with open(os.path.join(_TRAINING_RUNS_DIR, fname)) as f:
+                        d = json.load(f)
+                    runs.append({
+                        'session_id': d.get('session_id'),
+                        'date':       (d.get('started_at') or '')[:10],
+                        'time':       (d.get('started_at') or '')[11:16],
+                        'folder':     os.path.basename(d.get('folder', '')),
+                        'stopped':    d.get('stopped', False),
+                        'images':     d.get('processed', 0),
+                        **d.get('summary', {}),
+                    })
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return jsonify(runs[::-1])  # chronological order
+
+
+@app.route('/api/receipts/add-alias', methods=['POST'])
+@login_required
+def add_alias():
+    data       = request.get_json() or {}
+    raw_text   = (data.get('raw_text') or '').strip()
+    variant_id = int(data.get('variant_id', 0))
+    if not raw_text or not variant_id:
+        return jsonify({'error': 'raw_text and variant_id required'}), 400
+    try:
+        with open(_PRODUCTS_MD_PATH) as f:
+            lines = f.readlines()
+        updated   = False
+        new_lines = []
+        for line in lines:
+            if (line.startswith('|') and '---' not in line and 'variant_id' not in line):
+                cols = line.rstrip('\n').split('|')
+                # cols: ['', id, name, code, price, aliases, '']
+                if len(cols) >= 6:
+                    try:
+                        if int(cols[1].strip()) == variant_id:
+                            existing = cols[5].strip()
+                            if raw_text.lower() not in existing.lower():
+                                sep      = ', ' if existing else ''
+                                cols[5]  = f' {existing}{sep}{raw_text} '
+                            line    = '|'.join(cols) + '\n'
+                            updated = True
+                    except Exception:
+                        pass
+            new_lines.append(line)
+        if not updated:
+            return jsonify({'error': f'Product {variant_id} not found in catalog'}), 404
+        with open(_PRODUCTS_MD_PATH, 'w') as f:
+            f.writelines(new_lines)
+        _load_catalog()
+        return jsonify({'ok': True, 'catalog_size': len(_CATALOG)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/receipts/price-history/refresh', methods=['POST'])
+@login_required
+def price_history_refresh():
+    try:
+        _refresh_price_history(get_active_db_config())
+        return jsonify({'ok': True, 'products': len(_price_history)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/receipts/price-history')
+@login_required
+def price_history_get():
+    return jsonify(_price_history)
+
+
 # ── 404 / 500 error handlers ───────────────────────────────────
 
 @app.errorhandler(404)
@@ -2486,9 +4185,14 @@ def not_found(e):
 def server_error(e):
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Internal server error'}), 500
-    return render_template('dashboard.html', error=str(e)), 500
+    _env = session.get('env', 'production')
+    env_info = AVAILABLE_ENVS.get(_env, AVAILABLE_ENVS['production'])
+    return render_template('dashboard.html', error=str(e),
+                           active_env=_env, env_label=env_info['label'],
+                           env_color=env_info['color'], env_options=AVAILABLE_ENVS), 500
 
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 1989))
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
     app.run(host='0.0.0.0', port=port, debug=False)

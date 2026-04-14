@@ -10,8 +10,8 @@
   .ct-wrap  { display:flex;border:1.5px solid #e5e7eb;border-radius:6px;overflow:hidden; }
   .ct-btn   { padding:3px 10px;font-size:12px;font-weight:500;background:#fff;color:#9ca3af;border:none;cursor:pointer;transition:all .12s; }
   .ct-btn+.ct-btn { border-left:1.5px solid #e5e7eb; }
-  .ct-btn:hover  { background:#f5f0f4;color:#875a7b; }
-  .ct-btn.active { background:#875a7b;color:#fff; }
+  .ct-btn:hover  { background:#f5f0f4;color:var(--p); }
+  .ct-btn.active { background:var(--p);color:#fff; }
 
   .anal-kpi-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:24px; }
   @media(min-width:768px)  { .anal-kpi-grid { grid-template-columns:repeat(3,1fr); } }
@@ -27,7 +27,7 @@
   .anal-data-table th { padding:11px 14px;text-align:left;background:#f9fafb;color:#6b7280;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #e5e7eb; }
   .anal-data-table td { padding:11px 14px;border-bottom:1px solid #f3f4f6;color:#374151;line-height:1.4; }
   .anal-data-table tr:hover td { background:#fafafa; }
-  .anal-data-table tr.totals-row td { font-weight:700;background:linear-gradient(90deg,#faf5fa,#f5f0f4);border-top:2px solid #875a7b;border-bottom:none;color:#3d2645; }
+  .anal-data-table tr.totals-row td { font-weight:700;background:linear-gradient(90deg,#faf5fa,#f5f0f4);border-top:2px solid var(--p);border-bottom:none;color:#3d2645; }
   .tr { text-align:right; }
 
   .stock-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:10px; }
@@ -50,7 +50,7 @@
   .badge-profit { background:#d1fae5;color:#065f46;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600; }
   .badge-loss   { background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600; }
 
-  .spinner { width:26px;height:26px;border:3px solid #e5e7eb;border-top-color:#875a7b;border-radius:50%;animation:spin .7s linear infinite;margin:28px auto;display:block; }
+  .spinner { width:26px;height:26px;border:3px solid #e5e7eb;border-top-color:var(--p);border-radius:50%;animation:spin .7s linear infinite;margin:28px auto;display:block; }
   @keyframes spin { to { transform:rotate(360deg); } }
 
   .donut-wrap { display:flex;gap:16px;align-items:center;flex-wrap:wrap; }
@@ -60,8 +60,8 @@
   .donut-legend-dot  { width:9px;height:9px;border-radius:50%;flex-shrink:0; }
 
   .anal-tab { padding:9px 22px;border-radius:8px;font-size:13px;font-weight:600;border:none;background:none;color:#6b7280;cursor:pointer;transition:all .15s; white-space:nowrap; }
-  .anal-tab.active { background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;box-shadow:0 3px 10px rgba(135,90,123,.35); }
-  .anal-tab:hover:not(.active) { background:#f3e8f1;color:#875a7b; }
+  .anal-tab.active { background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;box-shadow:0 3px 10px var(--p-a30); }
+  .anal-tab:hover:not(.active) { background:var(--pbg);color:var(--p); }
   .tab-content { display:none; }
   .tab-content.active { display:block; }
 
@@ -71,8 +71,8 @@
 
 <!-- Page header -->
 <div style="margin-bottom:20px;">
-  <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">P&amp;L Dashboard</h1>
-  <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Revenue, costs and profit — full business overview</p>
+  <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">P&amp;L Dashboard</h1>
+  <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Revenue, costs and profit — full business overview</p>
 </div>
 
 <!-- Toolbar: tabs + year filter -->
@@ -109,9 +109,9 @@
       <div class="stat-value" id="kpi-cogs" style="color:#F77E53">—</div>
       <div class="stat-sub">Cost of goods sold</div>
     </div>
-    <div class="card" style="padding:20px 18px;border-top:3px solid #875a7b;">
+    <div class="card" style="padding:20px 18px;border-top:3px solid var(--p);">
       <div class="card-label">Operating Expenses</div>
-      <div class="stat-value" id="kpi-opex" style="color:#875a7b">—</div>
+      <div class="stat-value" id="kpi-opex" style="color:var(--p)">—</div>
       <div class="stat-sub">Rent, salaries, utilities…</div>
     </div>
     <div class="card" style="padding:20px 18px;border-top:3px solid #E67E22;">
@@ -199,7 +199,7 @@
           <canvas id="expDonutChart" width="170" height="170"></canvas>
           <div class="donut-center">
             <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total OpEx</div>
-            <div id="donut-total" style="font-size:13px;font-weight:700;color:#875a7b;"></div>
+            <div id="donut-total" style="font-size:13px;font-weight:700;color:var(--p);"></div>
           </div>
         </div>
         <div class="donut-legend" id="exp-legend" style="min-width:120px;"></div>
@@ -279,22 +279,22 @@
 
 <!-- ═══════ TAB: DIRECTORS SHARE ═══════ -->
 <div id="tab-directors" class="tab-content">
-  <div class="card p-5 mb-5" style="border-left:4px solid #875a7b;">
+  <div class="card p-5 mb-5" style="border-left:4px solid var(--p);">
     <p style="color:#6b7280;font-size:13.5px;margin:0;">
-      <strong style="color:#875a7b;">Distribution Rule:</strong>
+      <strong style="color:var(--p);">Distribution Rule:</strong>
       Net profit from profitable months is split —
       <strong><span id="dir-rule-shop">{{ split_shop }}</span>% Shop reinvestment</strong>,
       <strong><span id="dir-rule-kemboi">{{ split_kemboi }}</span>% Kemboi Family</strong>,
       <strong><span id="dir-rule-mutai">{{ split_mutai }}</span>% Mutai Family</strong>.
       Loss months are absorbed by the shop.
-      <a href="/profile" style="color:#875a7b;font-weight:600;margin-left:8px;font-size:12px;">Edit split →</a>
+      <a href="/profile" style="color:var(--p);font-weight:600;margin-left:8px;font-size:12px;">Edit split →</a>
     </p>
   </div>
 
   <!-- Summary cards -->
   <div class="dir-grid">
     <div class="dir-card">
-      <div class="ch" style="background:#875a7b;">
+      <div class="ch" style="background:var(--p);">
         <div>Shop Reinvestment</div>
         <div id="dir-card-shop-pct" style="font-size:11px;opacity:0.8;">{{ split_shop }}% stays in business</div>
       </div>
@@ -302,7 +302,7 @@
         <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px;">
           <div>
             <div class="card-label">Cumulative Share</div>
-            <div class="dir-amount" id="dir-shop" style="color:#875a7b;">—</div>
+            <div class="dir-amount" id="dir-shop" style="color:var(--p);">—</div>
           </div>
           <div style="text-align:right;">
             <div class="card-label">Avg / Month</div>
@@ -369,7 +369,7 @@
             <canvas id="dirSplitDonutChart" width="190" height="190"></canvas>
             <div class="donut-center">
               <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total</div>
-              <div id="dir-split-total" style="font-size:13px;font-weight:700;color:#875a7b;"></div>
+              <div id="dir-split-total" style="font-size:13px;font-weight:700;color:var(--p);"></div>
             </div>
           </div>
           <div class="donut-legend" id="dir-split-legend"></div>
@@ -411,7 +411,7 @@
             <th class="tr">Revenue</th>
             <th class="tr">Net Profit</th>
             <th class="tr">Status</th>
-            <th id="dir-th-shop"   class="tr" style="color:#875a7b;">Shop ({{ split_shop }}%)</th>
+            <th id="dir-th-shop"   class="tr" style="color:var(--p);">Shop ({{ split_shop }}%)</th>
             <th id="dir-th-kemboi" class="tr" style="color:#017E84;">Kemboi ({{ split_kemboi }}%)</th>
             <th id="dir-th-mutai"  class="tr" style="color:#F77E53;">Mutai ({{ split_mutai }}%)</th>
           </tr>
@@ -424,7 +424,7 @@
 
 <script>
 const KES = v => 'KES ' + Number(v).toLocaleString('en-KE', {minimumFractionDigits:0, maximumFractionDigits:0});
-const C = { purple:'#875a7b', teal:'#017E84', orange:'#F77E53', green:'#16a34a', red:'#dc2626', blue:'#4f46e5', yellow:'#E67E22', gray:'#9ca3af' };
+const C = { purple: THEME.p(), teal:'#017E84', orange:'#F77E53', green:'#16a34a', red:'#dc2626', blue:'#4f46e5', yellow:'#E67E22', gray:'#9ca3af' };
 const PAL = [C.purple,C.teal,C.orange,C.green,C.blue,C.yellow,C.red,C.gray,'#9B59B6','#1ABC9C','#2ECC71','#E74C3C'];
 
 let activeYear = 'all';
@@ -581,12 +581,16 @@ async function loadOverview() {
   const netEl = document.getElementById('kpi-net');
   netEl.textContent = KES(net);
   netEl.style.color = net >= 0 ? C.green : C.red;
-  document.getElementById('kpi-net-accent').style.background = net >= 0 ? C.green : C.red;
+  const _netAccentEl = document.getElementById('kpi-net-accent');
+  if (_netAccentEl) _netAccentEl.style.background = net >= 0 ? C.green : C.red;
+  // also update the card's top border color dynamically
+  const _netCard = document.getElementById('kpi-net') && document.getElementById('kpi-net').closest('.card');
+  if (_netCard) _netCard.style.borderTop = `3px solid ${net >= 0 ? C.green : C.red}`;
 
   const revSub = document.getElementById('kpi-rev-sub');
   if (activeYear === 'all' && s.annual_revenue) {
     revSub.innerHTML = Object.entries(s.annual_revenue)
-      .map(([yr, rev]) => `<span style="display:inline-block;background:#f5f0f4;color:#875a7b;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;margin-right:3px;">${yr}: ${KES(rev)}</span>`)
+      .map(([yr, rev]) => `<span style="display:inline-block;background:#f5f0f4;color:var(--p);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;margin-right:3px;">${yr}: ${KES(rev)}</span>`)
       .join('');
   } else {
     revSub.textContent = `${activeYear} only`;

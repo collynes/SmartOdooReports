@@ -3,8 +3,8 @@
 {% block content %}
 
 <div style="margin-bottom:18px;">
-  <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Reorder Alerts</h1>
-  <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Products projected to run out soon based on current stock and sales velocity — filter sets the velocity window</p>
+  <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Reorder Alerts</h1>
+  <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Products projected to run out soon based on current stock and sales velocity — filter sets the velocity window</p>
 </div>
 
 {% include '_filter.html' %}
@@ -56,7 +56,7 @@
           color:{% if urgent %}#dc2626{% elif soon %}#d97706{% else %}#374151{% endif %};">
           {% if r.days_left is not none %}{{ r.days_left|int }} days{% else %}—{% endif %}
         </td>
-        <td class="r" style="color:#875a7b;font-weight:600;">{{ '{:,.0f}'.format(r.suggested_order_qty|float) }} units</td>
+        <td class="r" style="color:var(--p);font-weight:600;">{{ '{:,.0f}'.format(r.suggested_order_qty|float) }} units</td>
         <td class="r" style="color:#6b7280;">
           {% if r.unit_cost and r.unit_cost|float > 0 %}KSH {{ '{:,.0f}'.format(r.unit_cost|float) }}{% else %}—{% endif %}
         </td>
@@ -69,7 +69,7 @@
     <tfoot>
       <tr style="background:#f9fafb;border-top:2px solid #e5e7eb;">
         <td colspan="7" style="font-size:12px;font-weight:600;color:#6b7280;padding:10px 14px;">Total estimated reorder cost</td>
-        <td class="r" style="font-weight:700;color:#875a7b;padding:10px 14px;">
+        <td class="r" style="font-weight:700;color:var(--p);padding:10px 14px;">
           KSH {{ '{:,.0f}'.format(rows|sum(attribute='reorder_cost')|float) }}
         </td>
       </tr>

@@ -8,8 +8,8 @@
     display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
   }
   .tab-btn.active {
-    background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;
-    box-shadow:0 2px 8px rgba(135,90,123,.3);
+    background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;
+    box-shadow:0 2px 8px var(--p-a30);
   }
   #search-drop .drop-item {
     padding:10px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;
@@ -48,8 +48,8 @@
 <!-- Page header -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Products</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Search a product for full profile, or browse performance rankings below</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Products</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Search a product for full profile, or browse performance rankings below</p>
   </div>
   <div style="display:flex;gap:8px;" id="ai-btn-wrap"></div>
 </div>
@@ -59,14 +59,14 @@
 
   <!-- Search header strip -->
   <div style="background:linear-gradient(135deg,#f5f0f4,#ede0ea);padding:14px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-    <svg width="16" height="16" fill="none" stroke="#875a7b" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <span style="font-size:13px;font-weight:700;color:#875a7b;">Product Lookup</span>
+    <svg width="16" height="16" fill="none" stroke="var(--p)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span style="font-size:13px;font-weight:700;color:var(--p);">Product Lookup</span>
     <div style="flex:1;min-width:200px;position:relative;" id="search-wrap">
       <input id="prod-search" type="text" placeholder="Search by product name or ref code…"
              autocomplete="off"
              style="width:100%;padding:7px 12px 7px 12px;border:1.5px solid #d9bfd3;border-radius:7px;font-size:13px;color:#111827;outline:none;box-sizing:border-box;background:#fff;"
              oninput="onSearch(this.value)"
-             onfocus="this.style.borderColor='#875a7b'"
+             onfocus="this.style.borderColor='var(--p)'"
              onblur="setTimeout(()=>{ this.style.borderColor='#d9bfd3'; hideDrop(); }, 180)">
       <div id="search-drop"
            style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #e5e7eb;
@@ -99,7 +99,7 @@
 
     <!-- KPI tiles gradient -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;">
-      <div style="background:linear-gradient(135deg,#875a7b,#5c3d53);border-radius:10px;padding:14px 16px;color:#fff;">
+      <div style="background:linear-gradient(135deg,var(--p),var(--pd));border-radius:10px;padding:14px 16px;color:#fff;">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">All-time Revenue</div>
         <div id="k-total-rev" style="font-size:17px;font-weight:800;"></div>
       </div>
@@ -162,7 +162,7 @@
       <div id="cmp-panel-body">
       <div class="cmp-inputs">
         <div style="flex:1;min-width:0;">
-          <div style="font-size:11px;font-weight:600;color:#875a7b;margin-bottom:4px;">PERIOD A</div>
+          <div style="font-size:11px;font-weight:600;color:var(--p);margin-bottom:4px;">PERIOD A</div>
           <div class="cmp-date-row" style="display:flex;gap:6px;align-items:center;">
             <input type="date" id="p1-from" style="border:1px solid #e5e7eb;border-radius:5px;padding:5px 8px;font-size:12px;color:#374151;flex:1;min-width:0;">
             <span style="font-size:12px;color:#9ca3af;flex-shrink:0;">to</span>
@@ -178,7 +178,7 @@
           </div>
         </div>
         <button onclick="runComparison()"
-          style="background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end;">
+          style="background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end;">
           Compare
         </button>
       </div>
@@ -187,7 +187,7 @@
       <div id="cmp-result" style="display:none;">
         <div class="cmp-result-grid">
           <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px;">
-            <div style="font-size:11px;font-weight:600;color:#875a7b;margin-bottom:8px;">PERIOD A</div>
+            <div style="font-size:11px;font-weight:600;color:var(--p);margin-bottom:8px;">PERIOD A</div>
             <div id="cmp-p1-dates" style="font-size:11px;color:#9ca3af;margin-bottom:8px;"></div>
             <div style="display:flex;flex-direction:column;gap:6px;">
               <div><span style="font-size:11px;color:#9ca3af;">Revenue</span><br><span id="cmp-p1-rev" style="font-size:16px;font-weight:700;color:#059669;"></span></div>
@@ -301,8 +301,8 @@
             <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.avg_price|float) }}</td>
             <td class="r">
               <div class="score-bar">
-                <div class="score-bar-track"><div class="score-bar-fill" style="background:#875a7b;width:{{ r.score }}%;"></div></div>
-                <span class="score-pill" style="background:#f5f0f4;color:#875a7b;">{{ r.score }}%</span>
+                <div class="score-bar-track"><div class="score-bar-fill" style="background:var(--p);width:{{ r.score }}%;"></div></div>
+                <span class="score-pill" style="background:#f5f0f4;color:var(--p);">{{ r.score }}%</span>
               </div>
             </td>
           </tr>
@@ -466,7 +466,7 @@
 </div>
 
 <script>
-const PALETTE = ['#875a7b','#a56a9b','#714b67','#c095b8','#5c3d53','#d9bfd3','#3d2645','#ede0ea'];
+const PALETTE = [THEME.p(),THEME.pd(),'#17becf','#ff7f50','#2e8b57','#4682b4','#ffa500','#9370db'];
 const bestData  = {{ best_rows  | tojson }};
 const momData   = {{ mom_rows   | tojson }};
 const sleepData = {{ sleep_rows | tojson }};
@@ -478,7 +478,7 @@ const builtCharts = {};
 
 document.getElementById('ai-btn-wrap').innerHTML =
   `<button onclick="loadExplain('best')" title="AI Insight"
-    style="background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(135,90,123,.3);">
+    style="background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px var(--p-a30);">
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
       <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
     </svg>AI Insight</button>`;
@@ -585,7 +585,7 @@ function renderProfile(d) {
       data: {
         labels,
         datasets: [
-          { type:'bar',  label:'Revenue', data:revs, backgroundColor:'rgba(135,90,123,.55)', borderColor:'#875a7b', borderWidth:1, borderRadius:3, yAxisID:'y' },
+          { type:'bar',  label:'Revenue', data:revs, backgroundColor:'THEME.alpha(.55)', borderColor:THEME.p(), borderWidth:1, borderRadius:3, yAxisID:'y' },
           { type:'line', label:'Units',   data:qtys, borderColor:'#059669', backgroundColor:'rgba(5,150,105,.08)', borderWidth:2, pointRadius:3, tension:.35, fill:true, yAxisID:'y2' }
         ]
       },
@@ -698,7 +698,7 @@ function buildCharts(tab) {
     const labels = momData.map(r => r.product.length>20?r.product.slice(0,20)+'…':r.product);
     new Chart(document.getElementById('momBarChart').getContext('2d'), {
       type:'bar', data:{labels, datasets:[
-        {label:'Prior',data:momData.map(r=>parseFloat(r.prev_rev)),backgroundColor:'rgba(135,90,123,.35)',borderColor:'#875a7b',borderWidth:1,borderRadius:3},
+        {label:'Prior',data:momData.map(r=>parseFloat(r.prev_rev)),backgroundColor:'THEME.alpha(.35)',borderColor:THEME.p(),borderWidth:1,borderRadius:3},
         {label:'Current',data:momData.map(r=>parseFloat(r.curr_rev)),backgroundColor:'rgba(5,150,105,.7)',borderColor:'#059669',borderWidth:1,borderRadius:3}
       ]},
       options:{indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
@@ -714,7 +714,7 @@ function buildCharts(tab) {
     const labels = sleepData.map(r => r.product.length>20?r.product.slice(0,20)+'…':r.product);
     new Chart(document.getElementById('sleepBarChart').getContext('2d'), {
       type:'bar', data:{labels, datasets:[
-        {label:'Peak',data:sleepData.map(r=>parseFloat(r.peak_rev)),backgroundColor:'rgba(135,90,123,.35)',borderColor:'#875a7b',borderWidth:1,borderRadius:3},
+        {label:'Peak',data:sleepData.map(r=>parseFloat(r.peak_rev)),backgroundColor:'THEME.alpha(.35)',borderColor:THEME.p(),borderWidth:1,borderRadius:3},
         {label:'Recent',data:sleepData.map(r=>parseFloat(r.recent_rev)),backgroundColor:'rgba(220,38,38,.65)',borderColor:'#dc2626',borderWidth:1,borderRadius:3}
       ]},
       options:{indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},

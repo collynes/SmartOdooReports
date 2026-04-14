@@ -4,8 +4,8 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Cross-sell Opportunities</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Top 5 products this period — what customers buy alongside them</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Cross-sell Opportunities</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Top 5 products this period — what customers buy alongside them</p>
   </div>
   {% set explain_page = 'crosssell' %}{% include '_explain.html' %}
 </div>
@@ -16,7 +16,7 @@
   {% for item in results %}
   <div class="card" style="overflow:hidden;margin-bottom:14px;">
     <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6;background:#faf5fa;display:flex;align-items:center;gap:10px;">
-      <span style="background:#875a7b;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">{{ loop.index }}</span>
+      <span style="background:var(--p);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">{{ loop.index }}</span>
       <span style="font-weight:600;color:#374151;font-size:14px;">{{ item.anchor }}</span>
     </div>
     {% if item.pairs %}

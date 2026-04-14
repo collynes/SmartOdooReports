@@ -3,14 +3,14 @@
 {% block content %}
 <style>
   .exp-tab { padding:9px 20px;border:none;background:none;font-size:13px;font-weight:600;color:#9ca3af;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s; }
-  .exp-tab.active { color:#875a7b;border-bottom-color:#875a7b; }
+  .exp-tab.active { color:var(--p);border-bottom-color:var(--p); }
 </style>
 
 <!-- Header -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
   <div>
-    <h1 style="font-size:20px;font-weight:700;color:#1f2937;margin:0;">Expenses</h1>
-    <p style="font-size:13px;color:#9ca3af;margin:2px 0 0;">Track, import and manage all business expenses — {{ filter_label }}</p>
+    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Expenses</h1>
+    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Track, import and manage all business expenses — {{ filter_label }}</p>
   </div>
   <div style="display:flex;gap:8px;">
     <label style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;" for="xls-input">
@@ -22,7 +22,7 @@
       <input type="file" id="xls-input" name="xls_file" accept=".xlsx,.xls,.csv" onchange="document.getElementById('xls-form').submit()">
     </form>
     <button onclick="document.getElementById('add-modal').style.display='flex'"
-      style="background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(135,90,123,.3);">
+      style="background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px var(--p-a30);">
       <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Add Expense
     </button>
@@ -39,7 +39,7 @@
     <div style="font-size:22px;font-weight:800;line-height:1;">KSH {{ '{:,.0f}'.format(total_all|float) }}</div>
     <div style="font-size:11px;opacity:.6;margin-top:3px;">{{ filter_label }}</div>
   </div>
-  <div style="background:linear-gradient(135deg,#875a7b,#5c3d53);border-radius:12px;padding:16px 18px;color:#fff;">
+  <div style="background:linear-gradient(135deg,var(--p),var(--pd));border-radius:12px;padding:16px 18px;color:#fff;">
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Manual Entries</div>
     <div style="font-size:22px;font-weight:800;line-height:1;" data-count-up="{{ manual|length if manual else 0 }}">{{ manual|length if manual else 0 }}</div>
     <div style="font-size:11px;opacity:.6;margin-top:3px;">KSH {{ '{:,.0f}'.format(total_manual|float) }}</div>
@@ -94,7 +94,7 @@
         <div style="font-size:11px;color:#9ca3af;margin-bottom:4px;">Missing entries:</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;">
           {% for d in tile.missing_dates[:6] %}
-          <span style="background:#f5f0f4;color:#875a7b;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:500;">{{ d }}</span>
+          <span style="background:#f5f0f4;color:var(--p);padding:2px 7px;border-radius:4px;font-size:11px;font-weight:500;">{{ d }}</span>
           {% endfor %}
           {% if tile.missing_dates|length > 6 %}
           <span style="background:#f3f4f6;color:#9ca3af;padding:2px 7px;border-radius:4px;font-size:11px;">+{{ tile.missing_dates|length - 6 }} more</span>
@@ -127,7 +127,7 @@
 <div class="g-21" style="margin-bottom:20px;">
   <div class="card" style="padding:16px 18px;">
     <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
-      <svg width="14" height="14" fill="none" stroke="#875a7b" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg>
+      <svg width="14" height="14" fill="none" stroke="var(--p)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg>
       Expense Breakdown — {{ filter_label }}
     </div>
     {% if by_category %}
@@ -137,12 +137,12 @@
       <div>
         <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
           <span style="color:#374151;font-weight:600;">{{ c.category }}</span>
-          <span style="color:#875a7b;font-weight:700;">KSH {{ '{:,.0f}'.format(c.total|float) }}
+          <span style="color:var(--p);font-weight:700;">KSH {{ '{:,.0f}'.format(c.total|float) }}
             <span style="color:#9ca3af;font-weight:400;font-size:11px;">({{ c.cnt }}×)</span>
           </span>
         </div>
         <div style="background:#f3f4f6;border-radius:4px;height:6px;">
-          <div style="background:linear-gradient(90deg,#875a7b,#a56a9b);border-radius:4px;height:6px;width:{{ ((c.total|float / max_val)*100)|round }}%;transition:width .4s;"></div>
+          <div style="background:linear-gradient(90deg,var(--p),var(--pbdr));border-radius:4px;height:6px;width:{{ ((c.total|float / max_val)*100)|round }}%;transition:width .4s;"></div>
         </div>
       </div>
       {% endfor %}
@@ -154,7 +154,7 @@
 
   <div class="card" style="padding:16px 18px;background:linear-gradient(135deg,#f9fafb,#f3f4f6);">
     <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-      <svg width="14" height="14" fill="none" stroke="#875a7b" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <svg width="14" height="14" fill="none" stroke="var(--p)" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       Import from Excel
     </div>
     <p style="font-size:12.5px;color:#6b7280;margin:0 0 10px;line-height:1.6;">
@@ -206,7 +206,7 @@
           </td>
           <td class="c">
             {% if e.source == 'smart-fill' %}
-            <span style="background:#f5f0f4;color:#875a7b;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">Smart</span>
+            <span style="background:#f5f0f4;color:var(--p);padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">Smart</span>
             {% elif e.source == 'import' %}
             <span class="badge-info">Import</span>
             {% else %}
@@ -273,7 +273,7 @@
 <div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:12px;padding:0;width:100%;max-width:460px;max-height:90vh;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,.3);">
     <!-- Modal header -->
-    <div style="background:linear-gradient(135deg,#875a7b,#5c3d53);padding:18px 22px;color:#fff;display:flex;align-items:center;justify-content:space-between;">
+    <div style="background:linear-gradient(135deg,var(--p),var(--pd));padding:18px 22px;color:#fff;display:flex;align-items:center;justify-content:space-between;">
       <div>
         <div style="font-size:15px;font-weight:700;">Add Expense</div>
         <div style="font-size:11px;opacity:.7;margin-top:2px;">Record a new business expense</div>
@@ -290,20 +290,20 @@
           <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Date *</label>
           <input type="date" name="expense_date" id="field-date"
             style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
-            onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'" required>
+            onfocus="this.style.borderColor='var(--p)'" onblur="this.style.borderColor='#d1d5db'" required>
         </div>
         <div>
           <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Amount (KSH) *</label>
           <input type="number" name="amount" id="field-amount" step="0.01" min="0"
             style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
-            onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'" required>
+            onfocus="this.style.borderColor='var(--p)'" onblur="this.style.borderColor='#d1d5db'" required>
         </div>
       </div>
       <div style="margin-bottom:14px;">
         <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Category *</label>
         <input type="text" name="category" id="field-category" list="cat-list" placeholder="Rent, Salary, Utilities…"
           style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
-          onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'" required>
+          onfocus="this.style.borderColor='var(--p)'" onblur="this.style.borderColor='#d1d5db'" required>
         <datalist id="cat-list">
           {% for cat in ['Rent','Salary','Utilities','Transport','Marketing','Insurance','Internet','Phone','Office Supplies','Maintenance','Stock Purchase'] %}
           <option value="{{ cat }}">{% endfor %}
@@ -314,13 +314,13 @@
         <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Vendor / Payee</label>
         <input type="text" name="vendor" id="field-vendor"
           style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
-          onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'">
+          onfocus="this.style.borderColor='var(--p)'" onblur="this.style.borderColor='#d1d5db'">
       </div>
       <div style="margin-bottom:14px;">
         <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Description</label>
         <input type="text" name="description"
           style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
-          onfocus="this.style.borderColor='#875a7b'" onblur="this.style.borderColor='#d1d5db'">
+          onfocus="this.style.borderColor='var(--p)'" onblur="this.style.borderColor='#d1d5db'">
       </div>
       <div style="margin-bottom:20px;">
         <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Frequency</label>
@@ -328,8 +328,8 @@
           {% for val, lbl in [('once','One-time'),('weekly','Weekly'),('monthly','Monthly'),('annual','Annual')] %}
           <label style="flex:1;text-align:center;">
             <input type="radio" name="frequency" value="{{ val }}" {% if val == 'monthly' %}checked{% endif %}
-              style="display:none;" onchange="this.parentElement.style.background=this.checked?'#875a7b':'#f9fafb';this.parentElement.style.color=this.checked?'#fff':'#6b7280';">
-            <span id="freq-{{ val }}" style="display:block;padding:7px 0;border-radius:6px;font-size:12px;font-weight:500;border:1px solid #e5e7eb;background:{% if val == 'monthly' %}#875a7b{% else %}#f9fafb{% endif %};color:{% if val == 'monthly' %}#fff{% else %}#6b7280{% endif %};cursor:pointer;">
+              style="display:none;" onchange="this.parentElement.style.background=this.checked?'var(--p)':'#f9fafb';this.parentElement.style.color=this.checked?'#fff':'#6b7280';">
+            <span id="freq-{{ val }}" style="display:block;padding:7px 0;border-radius:6px;font-size:12px;font-weight:500;border:1px solid #e5e7eb;background:{% if val == 'monthly' %}var(--p){% else %}#f9fafb{% endif %};color:{% if val == 'monthly' %}#fff{% else %}#6b7280{% endif %};cursor:pointer;">
               {{ lbl }}
             </span>
           </label>
@@ -337,7 +337,7 @@
         </div>
       </div>
       <button type="submit"
-        style="width:100%;background:linear-gradient(135deg,#875a7b,#5c3d53);color:#fff;border:none;border-radius:7px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(135,90,123,.3);">
+        style="width:100%;background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;border:none;border-radius:7px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px var(--p-a30);">
         Save Expense
       </button>
     </form>
@@ -352,7 +352,7 @@ document.querySelectorAll('input[name="frequency"]').forEach(radio => {
   radio.addEventListener('change', function() {
     document.querySelectorAll('input[name="frequency"]').forEach(r => {
       const span = r.parentElement.querySelector('span');
-      span.style.background = r.checked ? '#875a7b' : '#f9fafb';
+      span.style.background = r.checked ? 'var(--p)' : '#f9fafb';
       span.style.color      = r.checked ? '#fff' : '#6b7280';
     });
   });
