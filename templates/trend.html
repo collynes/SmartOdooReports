@@ -24,7 +24,13 @@
 </div>
 
 <div class="card" style="padding:18px 20px;margin-bottom:14px;">
-  <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Daily Revenue</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div style="font-size:13px;font-weight:600;color:#374151;">Daily Revenue</div>
+    <div style="font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:5px;">
+      <svg width="24" height="6" viewBox="0 0 24 6"><line x1="0" y1="3" x2="24" y2="3" stroke="rgba(180,130,170,0.8)" stroke-width="1.5" stroke-dasharray="6,4"/></svg>
+      Prev month
+    </div>
+  </div>
   <canvas id="revChart" height="80"></canvas>
 </div>
 
@@ -35,52 +41,74 @@
 
 <script>
 const raw = {{ daily | tojson }};
-const labels = raw.map(d => fmtDate(d.day));
+const labels  = raw.map(d => fmtDate(d.day));
 const revData = raw.map(d => parseFloat(d.revenue));
 const ordData = raw.map(d => parseInt(d.orders));
 const ptRadius = raw.length > 60 ? 0 : 3;
 const gridColor = '#f3f4f6';
 const tickColor = '#9ca3af';
+const PREV_COLOR = 'rgba(180,130,170,0.8)';
+const PREV_DASH  = [6, 4];
 
-new Chart(document.getElementById('revChart').getContext('2d'), {
-  type: 'bar',
-  data: { labels, datasets: [{
-    label: 'Revenue',
-    data: revData,
-    backgroundColor: THEME.alpha(.7),
-    borderColor: THEME.p(),
-    borderWidth: 1,
-    borderRadius: 3,
-  }]},
-  options: {
-    plugins: { legend:{display:false}, tooltip:{callbacks:{label: c=>'KSH '+c.parsed.y.toLocaleString()}}},
-    scales: {
-      x:{type:'category',ticks:{color:tickColor,font:{size:11},maxTicksLimit:12}, grid:{display:false}},
-      y:{ticks:{color:tickColor,font:{size:11},callback:v=>'KSH '+v.toLocaleString()}, grid:{color:gridColor}}
-    }
-  }
-});
+const prevRevArr = new Array(labels.length).fill(null);
+const prevOrdArr = new Array(labels.length).fill(null);
 
-new Chart(document.getElementById('ordChart').getContext('2d'), {
-  type: 'line',
-  data: { labels, datasets: [{
-    label: 'Orders',
-    data: ordData,
-    borderColor: '#714b67',
-    backgroundColor: 'rgba(113,75,103,.07)',
-    fill: true,
-    tension: 0.35,
-    pointRadius: ptRadius,
-    pointBackgroundColor: '#714b67',
-    borderWidth: 2,
-  }]},
-  options: {
-    plugins: { legend:{display:false} },
-    scales: {
-      x:{type:'category',ticks:{color:tickColor,font:{size:11},maxTicksLimit:12}, grid:{color:gridColor}},
-      y:{ticks:{color:tickColor,font:{size:11},stepSize:1}, grid:{color:gridColor}}
+const _prevUrl = '/api/prev-month-trend?period={{ filter_period }}{% if filter_period == "custom" %}&from={{ filter_from }}&to={{ filter_to }}{% endif %}';
+
+let revChart = null, ordChart = null;
+
+function buildCharts(prevRevArr, prevOrdArr) {
+  const legendFilter = (item) => item.text === 'Prev Month'
+    ? prevRevArr.some(v => v !== null) : true;
+
+  revChart = new Chart(document.getElementById('revChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Revenue', data: revData, backgroundColor: THEME.alpha(.7), borderColor: THEME.p(), borderWidth: 1, borderRadius: 3 },
+      { label: 'Prev Month', type: 'line', data: prevRevArr, borderColor: PREV_COLOR, backgroundColor: 'transparent',
+        fill: false, tension: 0.35, pointRadius: 0, borderWidth: 1.5, borderDash: PREV_DASH }
+    ]},
+    options: {
+      plugins: {
+        legend: { display: true, labels: { filter: legendFilter, color: '#6b7280', font:{size:11}, boxWidth:24 } },
+        tooltip: { callbacks: { label: c => c.dataset.label + ': KSH ' + c.parsed.y.toLocaleString() } }
+      },
+      scales: {
+        x: { type:'category', ticks:{color:tickColor,font:{size:11},maxTicksLimit:12}, grid:{display:false} },
+        y: { ticks:{color:tickColor,font:{size:11},callback:v=>'KSH '+v.toLocaleString()}, grid:{color:gridColor} }
+      }
     }
-  }
-});
+  });
+
+  ordChart = new Chart(document.getElementById('ordChart').getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Orders', data: ordData, borderColor: '#714b67', backgroundColor: 'rgba(113,75,103,.07)',
+        fill: true, tension: 0.35, pointRadius: ptRadius, pointBackgroundColor: '#714b67', borderWidth: 2 },
+      { label: 'Prev Month', data: prevOrdArr, borderColor: PREV_COLOR, backgroundColor: 'transparent',
+        fill: false, tension: 0.35, pointRadius: 0, borderWidth: 1.5, borderDash: PREV_DASH }
+    ]},
+    options: {
+      plugins: {
+        legend: { display: true, labels: { filter: legendFilter, color: '#6b7280', font:{size:11}, boxWidth:24 } }
+      },
+      scales: {
+        x: { type:'category', ticks:{color:tickColor,font:{size:11},maxTicksLimit:12}, grid:{color:gridColor} },
+        y: { ticks:{color:tickColor,font:{size:11},stepSize:1}, grid:{color:gridColor} }
+      }
+    }
+  });
+}
+
+fetch(_prevUrl)
+  .then(r => r.json())
+  .then(prevData => {
+    prevData.forEach(d => {
+      const i = d.day_num - 1;
+      if (i >= 0 && i < labels.length) { prevRevArr[i] = d.total; prevOrdArr[i] = d.orders; }
+    });
+    buildCharts(prevRevArr, prevOrdArr);
+  })
+  .catch(() => buildCharts(prevRevArr, prevOrdArr));
 </script>
 {% endblock %}

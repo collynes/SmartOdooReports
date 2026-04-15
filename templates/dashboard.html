@@ -285,6 +285,7 @@
         <button class="view-btn" id="btn-trend-ord" onclick="setTrendView('ord')">Orders</button>
         <button class="view-btn" id="btn-trend-both" onclick="setTrendView('both')">Both</button>
       </div>
+      <button class="view-btn active" id="btn-prev-month" onclick="togglePrevMonth()" style="font-size:11px;border-style:dashed;">Prev Month</button>
     </div>
     <div id="trend-rev-wrap"><canvas id="trendRevChart" height="70"></canvas></div>
     <div id="trend-ord-wrap" style="display:none;"><canvas id="trendOrdChart" height="70"></canvas></div>
@@ -375,42 +376,108 @@ function setRevView(mode) {
 const top5Data = {{ top5 | tojson }};
 let trendRevChart = null, trendOrdChart = null, trendBothRevChart = null, trendBothOrdChart = null;
 let trendData = [];
+let showPrevMonth = true;
+const PREV_COLOR = 'rgba(180,130,170,0.75)';
+const PREV_DASH  = [6, 4];
 
-// Load trend data (reuse same API)
-fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "custom" %}&from={{ filter_from }}&to={{ filter_to }}{% endif %}')
-  .then(r => r.json())
-  .then(data => {
+const _trendUrl    = '/api/revenue-trend?period={{ filter_period }}{% if filter_period == "custom" %}&from={{ filter_from }}&to={{ filter_to }}{% endif %}';
+const _prevMoUrl   = '/api/prev-month-trend?period={{ filter_period }}{% if filter_period == "custom" %}&from={{ filter_from }}&to={{ filter_to }}{% endif %}';
+
+Promise.all([fetch(_trendUrl).then(r=>r.json()), fetch(_prevMoUrl).then(r=>r.json())])
+  .then(([data, prevData]) => {
     trendData = data;
     const labels = data.map(d => fmtDate(d.day));
     const revs   = data.map(d => d.total);
     const ords   = data.map(d => d.orders);
     const ptR    = data.length > 60 ? 0 : 3;
 
+    // Align prev month by day_num (1-indexed position in period)
+    const prevRevs = new Array(labels.length).fill(null);
+    const prevOrds = new Array(labels.length).fill(null);
+    prevData.forEach(d => {
+      const i = d.day_num - 1;
+      if (i >= 0 && i < labels.length) { prevRevs[i] = d.total; prevOrds[i] = d.orders; }
+    });
+
+    const prevRevDataset = {
+      label: 'Prev Month',
+      type: 'line',
+      data: prevRevs,
+      borderColor: PREV_COLOR, backgroundColor: 'transparent',
+      fill: false, tension: 0.35, pointRadius: 0,
+      borderWidth: 1.5, borderDash: PREV_DASH,
+    };
+    const prevOrdDataset = {
+      label: 'Prev Month',
+      data: prevOrds,
+      borderColor: PREV_COLOR, backgroundColor: 'transparent',
+      fill: false, tension: 0.35, pointRadius: 0,
+      borderWidth: 1.5, borderDash: PREV_DASH,
+    };
+
+    const trendOpts = (sz) => ({
+      plugins:{
+        legend:{display:true, labels:{filter:i=>i.text==='Prev Month'?showPrevMonth:true, color:'#6b7280', font:{size:10}, boxWidth:20}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': KSH '+c.parsed.y.toLocaleString()}}
+      },
+      scales:{
+        x:{type:'category',ticks:{color:'#9ca3af',font:{size:sz},maxTicksLimit:12},grid:{display:false}},
+        y:{ticks:{color:'#9ca3af',font:{size:sz},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}
+      }
+    });
+    const ordOpts = (sz) => ({
+      plugins:{
+        legend:{display:true, labels:{filter:i=>i.text==='Prev Month'?showPrevMonth:true, color:'#6b7280', font:{size:10}, boxWidth:20}}
+      },
+      scales:{
+        x:{type:'category',ticks:{color:'#9ca3af',font:{size:sz},maxTicksLimit:12},grid:{display:false}},
+        y:{ticks:{color:'#9ca3af',font:{size:sz},stepSize:1},grid:{color:'#f3f4f6'}}
+      }
+    });
+
     trendRevChart = new Chart(document.getElementById('trendRevChart').getContext('2d'), {
-      type:'bar', data:{labels,datasets:[{label:'Revenue',data:revs,backgroundColor:THEME.alpha(.65),borderRadius:3}]},
-      options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
-        scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:10},maxTicksLimit:12},grid:{display:false}},
-                y:{ticks:{color:'#9ca3af',font:{size:10},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}
+      type:'bar',
+      data:{labels, datasets:[
+        {label:'Revenue', data:revs, backgroundColor:THEME.alpha(.65), borderRadius:3},
+        prevRevDataset
+      ]},
+      options: trendOpts(10)
     });
     trendOrdChart = new Chart(document.getElementById('trendOrdChart').getContext('2d'), {
-      type:'line', data:{labels,datasets:[{label:'Orders',data:ords,borderColor:'#714b67',backgroundColor:'rgba(113,75,103,.07)',fill:true,tension:0.35,pointRadius:ptR,borderWidth:2}]},
-      options:{plugins:{legend:{display:false}},
-        scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:10},maxTicksLimit:12},grid:{display:false}},
-                y:{ticks:{color:'#9ca3af',font:{size:10},stepSize:1},grid:{color:'#f3f4f6'}}}}
+      type:'line',
+      data:{labels, datasets:[
+        {label:'Orders', data:ords, borderColor:'#714b67', backgroundColor:'rgba(113,75,103,.07)', fill:true, tension:0.35, pointRadius:ptR, borderWidth:2},
+        prevOrdDataset
+      ]},
+      options: ordOpts(10)
     });
     trendBothRevChart = new Chart(document.getElementById('trendBothRevChart').getContext('2d'), {
-      type:'bar', data:{labels,datasets:[{data:revs,backgroundColor:THEME.alpha(.65),borderRadius:3}]},
-      options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
-        scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:9},maxTicksLimit:12},grid:{display:false}},
-                y:{ticks:{color:'#9ca3af',font:{size:9},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}
+      type:'bar',
+      data:{labels, datasets:[
+        {label:'Revenue', data:revs, backgroundColor:THEME.alpha(.65), borderRadius:3},
+        {...prevRevDataset}
+      ]},
+      options: trendOpts(9)
     });
     trendBothOrdChart = new Chart(document.getElementById('trendBothOrdChart').getContext('2d'), {
-      type:'line', data:{labels,datasets:[{data:ords,borderColor:'#714b67',backgroundColor:'rgba(113,75,103,.07)',fill:true,tension:0.35,pointRadius:ptR,borderWidth:2}]},
-      options:{plugins:{legend:{display:false}},
-        scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:9},maxTicksLimit:12},grid:{display:false}},
-                y:{ticks:{color:'#9ca3af',font:{size:9},stepSize:1},grid:{color:'#f3f4f6'}}}}
+      type:'line',
+      data:{labels, datasets:[
+        {label:'Orders', data:ords, borderColor:'#714b67', backgroundColor:'rgba(113,75,103,.07)', fill:true, tension:0.35, pointRadius:ptR, borderWidth:2},
+        {...prevOrdDataset}
+      ]},
+      options: ordOpts(9)
     });
   });
+
+function togglePrevMonth() {
+  showPrevMonth = !showPrevMonth;
+  document.getElementById('btn-prev-month').classList.toggle('active', showPrevMonth);
+  [trendRevChart, trendOrdChart, trendBothRevChart, trendBothOrdChart].forEach(c => {
+    if (!c) return;
+    const ds = c.data.datasets.find(d => d.label === 'Prev Month');
+    if (ds) { ds.hidden = !showPrevMonth; c.update(); }
+  });
+}
 
 function setTrendView(mode) {
   ['rev','ord','both'].forEach(m => {

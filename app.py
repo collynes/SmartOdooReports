@@ -216,6 +216,13 @@ def get_date_range():
         return today - timedelta(days=30), today + timedelta(days=1), 'Last 30 Days', period
     elif period == 'last90':
         return today - timedelta(days=90), today + timedelta(days=1), 'Last 90 Days', period
+    elif period == 'samemonth':
+        # Previous month, days 1 through today's day number (same span as current month so far)
+        prev_last = today.replace(day=1) - timedelta(days=1)
+        start = prev_last.replace(day=1)
+        cap_day = min(today.day, prev_last.day)
+        end = start.replace(day=cap_day)
+        return start, end + timedelta(days=1), f"Same Period Last Month ({start.strftime('%b')})", 'samemonth'
     else:
         start = today.replace(day=1)
         return start, today + timedelta(days=1), 'This Month', 'month'
@@ -265,6 +272,17 @@ def get_compare_range(main_from, main_to, period):
         start = main_from.replace(year=main_from.year - 1)
         end   = main_to.replace(year=main_to.year - 1) if main_to.year > main_from.year else main_to - timedelta(days=365)
         return start, end, str(main_from.year - 1), cmp
+    elif cmp == 'samemonth':
+        # Shift the main period back exactly one month
+        import calendar
+        def _month_back(d):
+            m = d.month - 1 or 12
+            y = d.year - (1 if d.month == 1 else 0)
+            day = min(d.day, calendar.monthrange(y, m)[1])
+            return d.replace(year=y, month=m, day=day)
+        start = _month_back(main_from)
+        end   = _month_back(main_to)
+        return start, end, f"{start.strftime('%d %b')} – {(end - timedelta(days=1)).strftime('%d %b %Y')}", cmp
     else:  # prev (default) — equivalent window immediately before
         return main_from - delta, main_from, f"Prev {delta.days}d", cmp
 
@@ -1199,6 +1217,13 @@ def compare():
             return today - timedelta(days=30), today + timedelta(days=1)
         elif period == 'last90':
             return today - timedelta(days=90), today + timedelta(days=1)
+        elif period == 'samemonth':
+            import calendar as _cal
+            prev_last = today.replace(day=1) - timedelta(days=1)
+            start = prev_last.replace(day=1)
+            cap_day = min(today.day, prev_last.day)
+            end = start.replace(day=cap_day)
+            return start, end + timedelta(days=1)
         return today.replace(day=1), today + timedelta(days=1)
 
     a_fd, a_td = resolve(a_period, a_from_s, a_to_s)
@@ -1221,13 +1246,14 @@ def compare():
             'quarter':'This Quarter','lastquarter':'Last Quarter',
             'year':'This Year','lastyear':'Last Year',
             'last30':'Last 30 Days','last90':'Last 90 Days',
+            'samemonth': 'Same Period Last Month',
         }
         return labels.get(period, period)
 
     a_label = label(a_period, a_from_s, a_to_s, a_fd, a_td)
     b_label = label(b_period, b_from_s, b_to_s, b_fd, b_td)
 
-    periods = ['today','yesterday','week','lastweek','month','lastmonth','quarter','lastquarter','year','lastyear','last30','last90']
+    periods = ['today','yesterday','week','lastweek','month','lastmonth','quarter','lastquarter','year','lastyear','last30','last90','samemonth']
 
     _env = get_active_env()
     return render_template('compare.html',
@@ -1579,6 +1605,59 @@ def api_revenue_trend():
     """, (fd, td))
 
     return jsonify([{'day': str(r['day']), 'total': float(r['total']), 'orders': int(r['orders'])} for r in rows])
+
+
+@app.route('/api/prev-month-trend')
+@login_required
+def api_prev_month_trend():
+    """Previous month daily data up to the same number of days as the current period (for dotted comparison line)."""
+    import calendar as _cal
+    today = date.today()
+
+    fd_str = request.args.get('from', '')
+    td_str = request.args.get('to', '')
+    period = request.args.get('period', 'month')
+
+    if fd_str and td_str:
+        try:
+            fd = date.fromisoformat(fd_str)
+            td = date.fromisoformat(td_str)
+        except Exception:
+            fd = today.replace(day=1)
+            td = today
+    elif period == 'month':
+        fd = today.replace(day=1)
+        td = today
+    else:
+        fd = today.replace(day=1)
+        td = today
+
+    num_days = (td - fd).days + 1  # how many days in current period
+
+    # Shift fd back one month
+    m = fd.month - 1 or 12
+    y = fd.year - (1 if fd.month == 1 else 0)
+    prev_start = fd.replace(year=y, month=m, day=1)
+    prev_last_day = _cal.monthrange(y, m)[1]
+    prev_end = prev_start.replace(day=min(num_days, prev_last_day))
+
+    rows = query("""
+        SELECT DATE(so.date_order) AS day,
+               ROUND(SUM(so.amount_total)::numeric, 0) AS total,
+               COUNT(DISTINCT so.id) AS orders
+        FROM sale_order so
+        WHERE so.state NOT IN ('cancel','draft')
+          AND so.date_order >= %s AND so.date_order < %s
+        GROUP BY 1 ORDER BY 1
+    """, (prev_start, prev_end + timedelta(days=1)))
+
+    return jsonify([{
+        'day': str(r['day']),
+        'day_num': (r['day'] - prev_start).days + 1,
+        'total': float(r['total']),
+        'orders': int(r['orders'])
+    } for r in rows])
+
 
 # ── Projections ───────────────────────────────────────────────
 

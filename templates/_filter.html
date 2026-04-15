@@ -1,16 +1,18 @@
 {% set periods = [
-  ('today',   'Today'),
-  ('week',    'Week'),
-  ('month',   'Month'),
-  ('quarter', 'Quarter'),
-  ('year',    'Year'),
-  ('last30',  '30 Days'),
-  ('last90',  '90 Days'),
+  ('today',     'Today'),
+  ('week',      'Week'),
+  ('month',     'Month'),
+  ('quarter',   'Quarter'),
+  ('year',      'Year'),
+  ('last30',    '30 Days'),
+  ('last90',    '90 Days'),
+  ('samemonth', 'Same Mo. Last Mth'),
 ] %}
 
 {% set cmp_options = [
   ('prev',        'Prev Period'),
   ('lastmonth',   'Last Month'),
+  ('samemonth',   'Same Period Last Month'),
   ('lastquarter', 'Last Quarter'),
   ('lastyear',    'Last Year'),
   ('custom',      'Custom'),
