@@ -2,11 +2,6 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 
-<div style="margin-bottom:18px;">
-  <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Dashboard</h1>
-  <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Live sales overview</p>
-</div>
-
 <!-- Smart Insight Card -->
 {% if insight %}
   {% if insight.type == 'positive' %}
@@ -51,87 +46,181 @@
 {% set aov_change = ((kpi.avg_order|float - prev_avg|float) / prev_avg|float * 100)|round(1) if prev_avg|float > 0 else 0 %}
 
 <style>
-  .kpi-grad { border-radius:14px;padding:22px 22px 18px;color:#fff;position:relative;overflow:hidden;cursor:default;transition:transform .18s,box-shadow .18s; }
-  .kpi-grad:hover { transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.22); }
-  .kpi-lbl { font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;opacity:.68;margin-bottom:4px; }
-  .kpi-val { font-size:30px;font-weight:800;letter-spacing:-.5px;line-height:1;margin-bottom:10px; }
-  .kpi-badge { display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;font-size:12px;font-weight:700;background:rgba(255,255,255,.18); }
-  .kpi-sub { display:inline;opacity:.6;font-size:11px;margin-left:8px; }
-  .kpi-icon-bg { position:absolute;right:14px;top:50%;transform:translateY(-50%);opacity:.14; }
+  /* Hero KPI banner */
+  .dash-hero {
+    background: linear-gradient(135deg, var(--pdd) 0%, var(--p) 50%, var(--pbdr) 100%);
+    border-radius: 14px;
+    padding: 22px 28px;
+    margin-bottom: 20px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .dash-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+  .dash-hero-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    opacity: .7;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hero-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+  }
+  .hero-kpi-item {
+    padding: 0 20px;
+    border-right: 1px solid rgba(255,255,255,.18);
+  }
+  .hero-kpi-item:first-child { padding-left: 0; }
+  .hero-kpi-item:last-child { border-right: none; }
+  .hero-kpi-lbl {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    opacity: .65;
+    margin-bottom: 5px;
+  }
+  .hero-kpi-val {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -.5px;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .hero-kpi-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 700;
+    background: rgba(255,255,255,.18);
+  }
+  .hero-kpi-sub {
+    font-size: 10.5px;
+    opacity: .6;
+    margin-top: 3px;
+  }
+  /* MTD progress bar in hero */
+  .hero-mtd-bar-track {
+    background: rgba(255,255,255,.22);
+    border-radius: 4px;
+    height: 5px;
+    margin-top: 7px;
+    overflow: hidden;
+  }
+  .hero-mtd-bar-fill {
+    height: 5px;
+    border-radius: 4px;
+    background: rgba(255,255,255,.85);
+    transition: width .6s ease;
+  }
+  /* Section card headings */
+  .section-title { font-size: 15px; font-weight: 700; color: var(--pdd); }
+  .section-sub   { font-size: 12.5px; color: #9ca3af; }
+  /* Bottom row 2-col grid */
+  .dash-bottom-row {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  /* Responsive */
+  @media (max-width: 700px) {
+    .hero-kpi-grid { grid-template-columns: repeat(2,1fr); gap: 14px 0; }
+    .hero-kpi-item { padding: 0 14px; border-right: none; border-bottom: 1px solid rgba(255,255,255,.15); padding-bottom: 14px; }
+    .hero-kpi-item:nth-child(2n) { border-right: none; }
+    .hero-kpi-item:nth-child(n+3) { padding-top: 14px; border-bottom: none; }
+    .dash-bottom-row { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 480px) {
+    .dash-hero { padding: 16px 16px; }
+    .hero-kpi-val { font-size: 20px; }
+  }
 </style>
 
-<!-- KPI Cards — gradient redesign -->
-<div class="kpi-grid kpi-grid-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
-
-  <!-- Revenue -->
-  <div class="kpi-grad" style="background:linear-gradient(135deg,var(--p) 0%,var(--pd) 100%);">
-    <div class="kpi-icon-bg"><svg width="64" height="64" fill="none" stroke="white" stroke-width="1.2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-    <div class="kpi-lbl">Revenue</div>
-    <div class="kpi-val" data-count-up="{{ kpi.revenue|float|round|int }}" data-prefix="KES ">KES 0</div>
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-      <span class="kpi-badge">{% if rev_change >= 0 %}↑ +{{ rev_change }}%{% else %}↓ {{ rev_change }}%{% endif %}</span>
-      {% if prev.revenue|float > 0 %}<span class="kpi-sub">vs KES {{ '{:,.0f}'.format(prev.revenue|float) }}</span>{% endif %}
-    </div>
-  </div>
-
-  <!-- Orders -->
-  <div class="kpi-grad" style="background:linear-gradient(135deg,#017E84 0%,#015060 100%);">
-    <div class="kpi-icon-bg"><svg width="64" height="64" fill="none" stroke="white" stroke-width="1.2" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
-    <div class="kpi-lbl">Orders</div>
-    <div class="kpi-val" data-count-up="{{ kpi.orders|int }}">0</div>
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-      <span class="kpi-badge">{% if ord_change >= 0 %}↑ +{{ ord_change }}%{% else %}↓ {{ ord_change }}%{% endif %}</span>
-      {% if prev.orders|int > 0 %}<span class="kpi-sub">vs {{ prev.orders }} orders</span>{% endif %}
-    </div>
-  </div>
-
-  <!-- Avg Order Value -->
-  <div class="kpi-grad" style="background:linear-gradient(135deg,#d97706 0%,#b45309 100%);">
-    <div class="kpi-icon-bg"><svg width="64" height="64" fill="none" stroke="white" stroke-width="1.2" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
-    <div class="kpi-lbl">Avg Order Value</div>
-    <div class="kpi-val" data-count-up="{{ kpi.avg_order|float|round|int }}" data-prefix="KES ">KES 0</div>
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-      <span class="kpi-badge">{% if aov_change >= 0 %}↑ +{{ aov_change }}%{% else %}↓ {{ aov_change }}%{% endif %}</span>
-      {% if prev_avg|float > 0 %}<span class="kpi-sub">vs KES {{ '{:,.0f}'.format(prev_avg|float) }}</span>{% endif %}
-    </div>
-  </div>
-
-</div>
-
-<!-- Monthly Revenue Target — upgraded -->
+<!-- Hero KPI Banner: Revenue · Orders · AOV · MTD Target -->
 {% if monthly_target > 0 %}
-{% set target_pct = [((mtd_revenue / monthly_target) * 100)|round(1), 100]|min %}
-{% set bar_grad = 'linear-gradient(90deg,var(--p),var(--pbdr))' if target_pct < 50 else ('linear-gradient(90deg,#d97706,#f59e0b)' if target_pct < 80 else 'linear-gradient(90deg,#16a34a,#22c55e)') %}
-{% set pct_color = '#16a34a' if target_pct >= 80 else ('#d97706' if target_pct >= 50 else 'var(--p)') %}
-<div style="background:linear-gradient(135deg,#faf5fa,#f0e8f0);border:1px solid #e5d5e5;border-radius:14px;padding:16px 22px;margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-  <div style="flex-shrink:0;">
-    <div style="font-size:10px;font-weight:700;color:var(--p);text-transform:uppercase;letter-spacing:.09em;margin-bottom:3px;">{{ month_label }} Target</div>
-    <div style="font-size:22px;font-weight:800;color:var(--pdd);line-height:1;">KES {{ '{:,.0f}'.format(mtd_revenue) }}</div>
-    <div style="font-size:12px;color:#9ca3af;margin-top:2px;">of KES {{ '{:,.0f}'.format(monthly_target) }} goal</div>
-  </div>
-  <div style="flex:1;min-width:180px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-      <span style="font-size:11px;color:#9ca3af;">Progress this month</span>
-      <span style="font-size:16px;font-weight:800;color:{{ pct_color }};">{{ target_pct }}%</span>
-    </div>
-    <div style="background:#e5d5e5;border-radius:8px;height:12px;overflow:hidden;">
-      <div style="height:12px;border-radius:8px;background:{{ bar_grad }};width:{{ target_pct }}%;transition:width .6s ease;box-shadow:0 2px 4px rgba(0,0,0,.15);"></div>
-    </div>
-    {% if target_pct < 100 %}
-    <div style="font-size:11px;color:#9ca3af;margin-top:4px;">KES {{ '{:,.0f}'.format(monthly_target - mtd_revenue) }} remaining</div>
-    {% else %}
-    <div style="font-size:11px;color:#16a34a;font-weight:600;margin-top:4px;">🎉 Target achieved!</div>
-    {% endif %}
-  </div>
-  <a href="/profile#operations" style="font-size:11.5px;color:var(--p);font-weight:600;text-decoration:none;flex-shrink:0;white-space:nowrap;">Edit →</a>
-</div>
+  {% set target_pct = [((mtd_revenue / monthly_target) * 100)|round(1), 100]|min %}
+  {% set pct_color_cls = 'green' if target_pct >= 80 else ('amber' if target_pct >= 50 else 'purple') %}
+{% else %}
+  {% set target_pct = 0 %}
 {% endif %}
+
+<div class="dash-hero">
+  <div class="dash-hero-title">
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+    Dashboard — {{ filter_label }}
+  </div>
+  <div class="hero-kpi-grid">
+
+    <!-- Revenue -->
+    <div class="hero-kpi-item">
+      <div class="hero-kpi-lbl">Revenue</div>
+      <div class="hero-kpi-val" data-count-up="{{ kpi.revenue|float|round|int }}" data-prefix="KES ">KES 0</div>
+      <div class="hero-kpi-badge">{% if rev_change >= 0 %}↑ +{{ rev_change }}%{% else %}↓ {{ rev_change }}%{% endif %}</div>
+      {% if prev.revenue|float > 0 %}<div class="hero-kpi-sub">vs KES {{ '{:,.0f}'.format(prev.revenue|float) }}</div>{% endif %}
+    </div>
+
+    <!-- Orders -->
+    <div class="hero-kpi-item">
+      <div class="hero-kpi-lbl">Orders</div>
+      <div class="hero-kpi-val" data-count-up="{{ kpi.orders|int }}">0</div>
+      <div class="hero-kpi-badge">{% if ord_change >= 0 %}↑ +{{ ord_change }}%{% else %}↓ {{ ord_change }}%{% endif %}</div>
+      {% if prev.orders|int > 0 %}<div class="hero-kpi-sub">vs {{ prev.orders }} orders</div>{% endif %}
+    </div>
+
+    <!-- Avg Order Value -->
+    <div class="hero-kpi-item">
+      <div class="hero-kpi-lbl">Avg Order</div>
+      <div class="hero-kpi-val" data-count-up="{{ kpi.avg_order|float|round|int }}" data-prefix="KES ">KES 0</div>
+      <div class="hero-kpi-badge">{% if aov_change >= 0 %}↑ +{{ aov_change }}%{% else %}↓ {{ aov_change }}%{% endif %}</div>
+      {% if prev_avg|float > 0 %}<div class="hero-kpi-sub">vs KES {{ '{:,.0f}'.format(prev_avg|float) }}</div>{% endif %}
+    </div>
+
+    <!-- MTD Target -->
+    <div class="hero-kpi-item">
+      <div class="hero-kpi-lbl">{{ month_label }} Target</div>
+      {% if monthly_target > 0 %}
+        <div class="hero-kpi-val">{{ target_pct }}%</div>
+        <div class="hero-kpi-badge">
+          {% if target_pct >= 100 %}Target hit!{% elif target_pct >= 80 %}On track{% elif target_pct >= 50 %}In progress{% else %}Behind{% endif %}
+        </div>
+        <div class="hero-mtd-bar-track">
+          <div class="hero-mtd-bar-fill" style="width:{{ target_pct }}%;"></div>
+        </div>
+        <div class="hero-kpi-sub" style="margin-top:5px;">KES {{ '{:,.0f}'.format(mtd_revenue) }} of KES {{ '{:,.0f}'.format(monthly_target) }} · <a href="/profile#operations" style="color:rgba(255,255,255,.75);font-weight:600;text-decoration:none;">Edit →</a></div>
+      {% else %}
+        <div class="hero-kpi-val" style="font-size:18px;opacity:.6;">—</div>
+        <div class="hero-kpi-sub"><a href="/profile#operations" style="color:rgba(255,255,255,.75);font-weight:600;text-decoration:none;">Set target →</a></div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
 
 <!-- Revenue + Top Products row -->
 <div class="dash-chart-row" style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px;">
   <div class="card" style="padding:18px 20px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-      <div style="font-size:13px;font-weight:600;color:#374151;">Revenue — {{ filter_label }}</div>
+      <div>
+        <div class="section-title">Revenue</div>
+        <div class="section-sub">{{ filter_label }}</div>
+      </div>
       <div class="view-toggle">
         <button class="view-btn active" id="btn-rev-line" onclick="setRevView('line')">Line</button>
         <button class="view-btn" id="btn-rev-bar" onclick="setRevView('bar')">Bar</button>
@@ -141,7 +230,10 @@
   </div>
   <div class="card" style="padding:18px 20px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-      <div style="font-size:13px;font-weight:600;color:#374151;">Top Products</div>
+      <div>
+        <div class="section-title">Top Products</div>
+        <div class="section-sub">{{ filter_label }}</div>
+      </div>
       <div class="view-toggle">
         <button class="view-btn active" id="btn-tp-bars" onclick="setTPView('bars')">Bars</button>
         <button class="view-btn" id="btn-tp-pie" onclick="setTPView('pie')">Pie</button>
@@ -178,49 +270,53 @@
   {% set explain_page = 'dashboard' %}{% include '_explain.html' %}
 </div>
 
-<!-- Revenue Trend (incorporated) -->
-<div class="card" style="padding:18px 20px;margin-bottom:14px;">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-    <div>
-      <div style="font-size:13px;font-weight:600;color:#374151;">Daily Revenue & Orders — {{ filter_label }}</div>
-    </div>
-    <div style="display:flex;gap:6px;">
+<!-- Daily Trend + Heatmap side-by-side -->
+<div class="dash-bottom-row">
+
+  <!-- Daily Revenue & Orders -->
+  <div class="card" style="padding:18px 20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div>
+        <div class="section-title">Daily Revenue &amp; Orders</div>
+        <div class="section-sub">{{ filter_label }}</div>
+      </div>
       <div class="view-toggle">
         <button class="view-btn active" id="btn-trend-rev" onclick="setTrendView('rev')">Revenue</button>
         <button class="view-btn" id="btn-trend-ord" onclick="setTrendView('ord')">Orders</button>
         <button class="view-btn" id="btn-trend-both" onclick="setTrendView('both')">Both</button>
       </div>
     </div>
+    <div id="trend-rev-wrap"><canvas id="trendRevChart" height="70"></canvas></div>
+    <div id="trend-ord-wrap" style="display:none;"><canvas id="trendOrdChart" height="70"></canvas></div>
+    <div id="trend-both-wrap" style="display:none;">
+      <canvas id="trendBothRevChart" height="55" style="margin-bottom:10px;"></canvas>
+      <canvas id="trendBothOrdChart" height="45"></canvas>
+    </div>
   </div>
-  <div id="trend-rev-wrap"><canvas id="trendRevChart" height="70"></canvas></div>
-  <div id="trend-ord-wrap" style="display:none;"><canvas id="trendOrdChart" height="70"></canvas></div>
-  <div id="trend-both-wrap" style="display:none;">
-    <canvas id="trendBothRevChart" height="55" style="margin-bottom:10px;"></canvas>
-    <canvas id="trendBothOrdChart" height="45"></canvas>
-  </div>
-</div>
 
-<!-- Revenue Activity Heatmap -->
-<div class="card" style="padding:18px 20px;margin-bottom:14px;">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-    <div>
-      <div style="font-size:13px;font-weight:600;color:#374151;">Revenue Activity — Last 12 Weeks</div>
-      <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Each square = one day · hover for details</div>
+  <!-- Revenue Activity Heatmap -->
+  <div class="card" style="padding:18px 20px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div class="section-title">Activity Heatmap</div>
+        <div class="section-sub">Last 12 weeks · hover for details</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#9ca3af;flex-shrink:0;">
+        <span>Less</span>
+        <div style="width:10px;height:10px;border-radius:2px;background:#f0e8f0;"></div>
+        <div style="width:10px;height:10px;border-radius:2px;background:#d4adce;"></div>
+        <div style="width:10px;height:10px;border-radius:2px;background:#b07aab;"></div>
+        <div style="width:10px;height:10px;border-radius:2px;background:var(--p);"></div>
+        <div style="width:10px;height:10px;border-radius:2px;background:var(--pd);"></div>
+        <span>More</span>
+      </div>
     </div>
-    <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#9ca3af;">
-      <span>Less</span>
-      <div style="width:10px;height:10px;border-radius:2px;background:#f0e8f0;"></div>
-      <div style="width:10px;height:10px;border-radius:2px;background:#d4adce;"></div>
-      <div style="width:10px;height:10px;border-radius:2px;background:#b07aab;"></div>
-      <div style="width:10px;height:10px;border-radius:2px;background:var(--p);"></div>
-      <div style="width:10px;height:10px;border-radius:2px;background:var(--pd);"></div>
-      <span>More</span>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <div id="heatmap-wrap" style="display:inline-flex;gap:3px;padding-bottom:4px;"></div>
     </div>
+    <div id="heatmap-tip" style="font-size:11.5px;color:var(--p);font-weight:600;margin-top:8px;min-height:16px;text-align:center;"></div>
   </div>
-  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-    <div id="heatmap-wrap" style="display:inline-flex;gap:3px;padding-bottom:4px;"></div>
-  </div>
-  <div id="heatmap-tip" style="font-size:11.5px;color:var(--p);font-weight:600;margin-top:8px;min-height:16px;text-align:center;"></div>
+
 </div>
 
 <script>
@@ -266,11 +362,11 @@ function setRevView(mode) {
   if (!revChart) return;
   revChart.config.type = mode;
   if (mode === 'bar') {
-    revChart.data.datasets[0].backgroundColor = 'THEME.alpha(.7)';
+    revChart.data.datasets[0].backgroundColor = THEME.alpha(.7);
     revChart.data.datasets[0].fill = false;
     revChart.data.datasets[0].borderRadius = 4;
   } else {
-    revChart.data.datasets[0].backgroundColor = 'THEME.alpha(.08)';
+    revChart.data.datasets[0].backgroundColor = THEME.alpha(.08);
     revChart.data.datasets[0].fill = true;
   }
   revChart.update();
@@ -291,7 +387,7 @@ fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "cust
     const ptR    = data.length > 60 ? 0 : 3;
 
     trendRevChart = new Chart(document.getElementById('trendRevChart').getContext('2d'), {
-      type:'bar', data:{labels,datasets:[{label:'Revenue',data:revs,backgroundColor:'THEME.alpha(.65)',borderRadius:3}]},
+      type:'bar', data:{labels,datasets:[{label:'Revenue',data:revs,backgroundColor:THEME.alpha(.65),borderRadius:3}]},
       options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
         scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:10},maxTicksLimit:12},grid:{display:false}},
                 y:{ticks:{color:'#9ca3af',font:{size:10},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}
@@ -303,7 +399,7 @@ fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "cust
                 y:{ticks:{color:'#9ca3af',font:{size:10},stepSize:1},grid:{color:'#f3f4f6'}}}}
     });
     trendBothRevChart = new Chart(document.getElementById('trendBothRevChart').getContext('2d'), {
-      type:'bar', data:{labels,datasets:[{data:revs,backgroundColor:'THEME.alpha(.65)',borderRadius:3}]},
+      type:'bar', data:{labels,datasets:[{data:revs,backgroundColor:THEME.alpha(.65),borderRadius:3}]},
       options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
         scales:{x:{type:'category',ticks:{color:'#9ca3af',font:{size:9},maxTicksLimit:12},grid:{display:false}},
                 y:{ticks:{color:'#9ca3af',font:{size:9},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}

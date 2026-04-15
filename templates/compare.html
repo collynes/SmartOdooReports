@@ -188,7 +188,7 @@ new Chart(document.getElementById('cmpChart').getContext('2d'), {
         label: '{{ a_label }}',
         data: aData.map(d => d.revenue),
         borderColor: THEME.p(),
-        backgroundColor: 'THEME.alpha(.06)',
+        backgroundColor: THEME.alpha(.06),
         fill: true, tension: 0.35,
         pointRadius: aData.length > 60 ? 0 : 3,
         borderWidth: 2,

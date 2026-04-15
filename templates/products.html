@@ -2,72 +2,142 @@
 {% block title %}Products{% endblock %}
 {% block content %}
 <style>
-  .tab-btn {
-    padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;
-    border:none;background:none;color:#6b7280;cursor:pointer;transition:all .15s;
-    display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  /* Prof-tab style for rankings tab bar */
+  .prof-tab {
+    padding: 9px 20px;
+    border-radius: 7px;
+    font-size: 13.5px;
+    font-weight: 600;
+    border: none;
+    background: none;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all .15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
   }
-  .tab-btn.active {
-    background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;
-    box-shadow:0 2px 8px var(--p-a30);
+  .prof-tab.active {
+    background: var(--p);
+    color: #fff;
+    box-shadow: 0 2px 8px var(--p-a30);
   }
+  .prof-tab:not(.active):hover { background: var(--p-a13); color: var(--pdd); }
+
   #search-drop .drop-item {
-    padding:10px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;
-    justify-content:space-between;gap:10px;border-bottom:1px solid #f9fafb;
+    padding: 10px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid #f9fafb;
   }
-  #search-drop .drop-item:hover { background:#f5f0f4; }
-  #search-drop .drop-item:last-child { border-bottom:none; }
+  #search-drop .drop-item:hover { background: #f5f0f4; }
+  #search-drop .drop-item:last-child { border-bottom: none; }
 
-  .score-bar { display:flex;align-items:center;gap:7px; }
-  .score-bar-track { flex:1;background:#f3f4f6;border-radius:3px;height:4px;max-width:44px; }
-  .score-bar-fill { border-radius:3px;height:4px;transition:width .4s; }
-  .score-pill { padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700; }
+  .score-bar { display: flex; align-items: center; gap: 7px; }
+  .score-bar-track { flex: 1; background: #f3f4f6; border-radius: 3px; height: 4px; max-width: 44px; }
+  .score-bar-fill { border-radius: 3px; height: 4px; transition: width .4s; }
+  .score-pill { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; }
 
-  .rank-tab-bar { overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px; }
+  .rank-tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+
+  /* section-title / section-sub */
+  .section-title { font-size: 15px; font-weight: 700; color: var(--pdd); }
+  .section-sub   { font-size: 12.5px; color: #9ca3af; }
+
+  /* stat-card KPI tiles */
+  .stat-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .stat-card .val { font-size: 20px; font-weight: 700; color: var(--pdd); line-height: 1; margin-bottom: 4px; }
+  .stat-card .lbl { font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
 
   /* chart grids — stack on mobile */
-  .chart-2col { display:grid;grid-template-columns:3fr 2fr;gap:14px; }
-  @media(max-width:640px) { .chart-2col { grid-template-columns:1fr; } }
+  .chart-2col { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; }
+  @media(max-width: 640px) { .chart-2col { grid-template-columns: 1fr; } }
 
   /* period comparison — stack on mobile */
-  .cmp-inputs { display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px; }
-  @media(max-width:520px) {
-    .cmp-inputs { flex-direction:column;align-items:stretch; }
-    .cmp-inputs > div { width:100%; }
-    .cmp-date-row { flex-wrap:wrap; }
+  .cmp-inputs { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  @media(max-width: 520px) {
+    .cmp-inputs { flex-direction: column; align-items: stretch; }
+    .cmp-inputs > div { width: 100%; }
+    .cmp-date-row { flex-wrap: wrap; }
   }
 
   /* cmp result grid */
-  .cmp-result-grid { display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center; }
-  @media(max-width:520px) {
-    .cmp-result-grid { grid-template-columns:1fr;gap:8px; }
-    .cmp-vs-col { display:flex;flex-direction:row;justify-content:center;gap:24px;padding:8px 0; }
+  .cmp-result-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; }
+  @media(max-width: 520px) {
+    .cmp-result-grid { grid-template-columns: 1fr; gap: 8px; }
+    .cmp-vs-col { display: flex; flex-direction: row; justify-content: center; gap: 24px; padding: 8px 0; }
+  }
+
+  /* Products hero strip */
+  .products-hero {
+    background: linear-gradient(135deg, var(--pdd) 0%, var(--p) 50%, var(--pbdr) 100%);
+    border-radius: 12px;
+    padding: 16px 22px;
+    margin-bottom: 20px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .products-hero-title {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -.3px;
+    line-height: 1;
+  }
+  .products-hero-sub {
+    font-size: 12.5px;
+    opacity: .75;
+    margin-top: 4px;
+  }
+  .products-hero-badge {
+    background: rgba(255,255,255,.2);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
   }
 </style>
 
-<!-- Page header -->
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+<!-- Products hero strip -->
+<div class="products-hero">
   <div>
-    <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">Products</h1>
-    <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Search a product for full profile, or browse performance rankings below</p>
+    <div class="products-hero-title">Products</div>
+    <div class="products-hero-sub">Search a product for full profile, or browse performance rankings below</div>
   </div>
-  <div style="display:flex;gap:8px;" id="ai-btn-wrap"></div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span class="products-hero-badge">{{ filter_label }}</span>
+    <div id="ai-btn-wrap"></div>
+  </div>
 </div>
 
 <!-- ══════════════════ PRODUCT SEARCH & PROFILE ══════════════════ -->
 <div class="card" style="margin-bottom:20px;overflow:visible;">
 
   <!-- Search header strip -->
-  <div style="background:linear-gradient(135deg,#f5f0f4,#ede0ea);padding:14px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+  <div style="background:var(--pbg);border-bottom:1px solid var(--pbdr);padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-radius:12px 12px 0 0;">
     <svg width="16" height="16" fill="none" stroke="var(--p)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <span style="font-size:13px;font-weight:700;color:var(--p);">Product Lookup</span>
+    <span class="section-title" style="font-size:13px;">Product Lookup</span>
     <div style="flex:1;min-width:200px;position:relative;" id="search-wrap">
       <input id="prod-search" type="text" placeholder="Search by product name or ref code…"
              autocomplete="off"
-             style="width:100%;padding:7px 12px 7px 12px;border:1.5px solid #d9bfd3;border-radius:7px;font-size:13px;color:#111827;outline:none;box-sizing:border-box;background:#fff;"
+             style="width:100%;padding:7px 12px;border:1.5px solid var(--pbdr);border-radius:7px;font-size:13px;color:#111827;outline:none;box-sizing:border-box;background:#fff;"
              oninput="onSearch(this.value)"
              onfocus="this.style.borderColor='var(--p)'"
-             onblur="setTimeout(()=>{ this.style.borderColor='#d9bfd3'; hideDrop(); }, 180)">
+             onblur="setTimeout(()=>{ this.style.borderColor='var(--pbdr)'; hideDrop(); }, 180)">
       <div id="search-drop"
            style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #e5e7eb;
                   border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:9999;overflow:hidden;max-height:320px;overflow-y:auto;"></div>
@@ -79,7 +149,7 @@
   <div id="profile-panel" style="display:none;padding:20px;">
 
     <!-- Product header -->
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid #f3f4f6;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #f3f4f6;">
       <div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span id="p-name" style="font-size:18px;font-weight:700;color:#111827;"></span>
@@ -97,33 +167,36 @@
       </button>
     </div>
 
-    <!-- KPI tiles gradient -->
+    <!-- KPI tiles — stat-card style -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;">
-      <div style="background:linear-gradient(135deg,var(--p),var(--pd));border-radius:10px;padding:14px 16px;color:#fff;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">All-time Revenue</div>
-        <div id="k-total-rev" style="font-size:17px;font-weight:800;"></div>
+      <div class="stat-card">
+        <div class="lbl">All-time Revenue</div>
+        <div id="k-total-rev" class="val" style="margin-top:6px;"></div>
       </div>
-      <div style="background:linear-gradient(135deg,#017E84,#015060);border-radius:10px;padding:14px 16px;color:#fff;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">This Year</div>
-        <div id="k-year-rev" style="font-size:17px;font-weight:800;"></div>
+      <div class="stat-card">
+        <div class="lbl">This Year</div>
+        <div id="k-year-rev" class="val" style="margin-top:6px;"></div>
       </div>
-      <div style="background:linear-gradient(135deg,#d97706,#b45309);border-radius:10px;padding:14px 16px;color:#fff;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">Units Sold</div>
-        <div id="k-total-qty" style="font-size:17px;font-weight:800;"></div>
+      <div class="stat-card">
+        <div class="lbl">Units Sold</div>
+        <div id="k-total-qty" class="val" style="margin-top:6px;"></div>
       </div>
-      <div style="background:linear-gradient(135deg,#4f46e5,#3730a3);border-radius:10px;padding:14px 16px;color:#fff;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">Orders</div>
-        <div id="k-orders" style="font-size:17px;font-weight:800;"></div>
+      <div class="stat-card">
+        <div class="lbl">Orders</div>
+        <div id="k-orders" class="val" style="margin-top:6px;"></div>
       </div>
-      <div style="background:linear-gradient(135deg,#059669,#047857);border-radius:10px;padding:14px 16px;color:#fff;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600;margin-bottom:4px;">Avg / Month</div>
-        <div id="k-avg-monthly" style="font-size:17px;font-weight:800;"></div>
+      <div class="stat-card">
+        <div class="lbl">Avg / Month</div>
+        <div id="k-avg-monthly" class="val" style="margin-top:6px;"></div>
       </div>
     </div>
 
     <!-- Sales history chart -->
     <div style="margin-bottom:20px;">
-      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:12px;">Monthly Sales — Last 24 Months</div>
+      <div style="margin-bottom:12px;">
+        <div class="section-title">Monthly Sales</div>
+        <div class="section-sub">Last 24 months</div>
+      </div>
       <div id="no-history" style="display:none;text-align:center;padding:30px;color:#9ca3af;font-size:13px;">No sales history available.</div>
       <div id="history-wrap" style="position:relative;height:200px;">
         <canvas id="historyChart"></canvas>
@@ -133,26 +206,28 @@
     <!-- Insight cards -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:20px;">
       <div style="background:#fef9ee;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#92400e;font-weight:700;margin-bottom:6px;">🏆 Best Month</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#92400e;font-weight:700;margin-bottom:6px;">Best Month</div>
         <div id="ins-best-month" style="font-size:14px;font-weight:600;color:#111827;"></div>
         <div id="ins-best-rev"   style="font-size:12px;color:#6b7280;margin-top:2px;"></div>
       </div>
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#991b1b;font-weight:700;margin-bottom:6px;">📉 Weakest Month</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#991b1b;font-weight:700;margin-bottom:6px;">Weakest Month</div>
         <div id="ins-worst-month" style="font-size:14px;font-weight:600;color:#111827;"></div>
         <div id="ins-worst-rev"   style="font-size:12px;color:#6b7280;margin-top:2px;"></div>
       </div>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#065f46;font-weight:700;margin-bottom:6px;">📦 Last Restock</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#065f46;font-weight:700;margin-bottom:6px;">Last Restock</div>
         <div id="ins-restock-date" style="font-size:14px;font-weight:600;color:#111827;"></div>
         <div id="ins-restock-qty"  style="font-size:12px;color:#6b7280;margin-top:2px;"></div>
       </div>
     </div>
 
     <!-- Period Comparison -->
-    <div style="background:#f9fafb;border:1px solid #f3f4f6;border-radius:8px;padding:16px 18px;">
+    <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:10px;padding:16px 18px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;">Period Comparison</div>
+        <div>
+          <div class="section-title" style="font-size:13px;">Period Comparison</div>
+        </div>
         <button id="cmp-toggle-btn" onclick="toggleCmpPanel()"
           style="background:none;border:1px solid #e5e7eb;color:#9ca3af;border-radius:6px;padding:3px 10px;font-size:11.5px;cursor:pointer;display:flex;align-items:center;gap:4px;">
           <span id="cmp-toggle-lbl">Hide</span>
@@ -178,7 +253,7 @@
           </div>
         </div>
         <button onclick="runComparison()"
-          style="background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end;">
+          style="background:var(--p);color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end;box-shadow:0 2px 8px var(--p-a30);">
           Compare
         </button>
       </div>
@@ -229,240 +304,262 @@
 </div>
 
 <!-- ══════════════════ PRODUCT RANKINGS ══════════════════ -->
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-  <div>
-    <h2 style="font-size:15px;font-weight:700;color:#374151;margin:0;">Product Rankings</h2>
-    <p style="font-size:12px;color:#9ca3af;margin:2px 0 0;">{{ filter_label }}</p>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px;">
-    <div class="view-toggle">
-      <button class="view-btn active" id="btn-table" onclick="setView('table')">Table</button>
-      <button class="view-btn" id="btn-chart"  onclick="setView('chart')">Chart</button>
-    </div>
-  </div>
-</div>
+<div class="card" style="margin-bottom:20px;overflow:hidden;">
 
-{% include '_filter.html' with context %}
+  <!-- Rankings card header -->
+  <div style="padding:16px 20px 0;border-bottom:1px solid #f3f4f6;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div class="section-title">Product Rankings</div>
+        <div class="section-sub">{{ filter_label }}</div>
+      </div>
+      <!-- Hidden toggle buttons — kept for JS compatibility -->
+      <div style="display:none;">
+        <button id="btn-table" onclick="setView('table')">Table</button>
+        <button id="btn-chart"  onclick="setView('chart')">Chart</button>
+      </div>
+    </div>
 
-<!-- Tab bar -->
-<div class="rank-tab-bar" style="margin-bottom:18px;">
-<div style="display:flex;gap:4px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:5px;width:max-content;min-width:100%;">
-  <button class="tab-btn active" id="tab-best"     onclick="setTab('best')">
-    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="18 20 18 10"/><polyline points="12 20 12 4"/><polyline points="6 20 6 14"/></svg>Best Sellers
-    {% if best_rows %}<span style="font-size:10px;opacity:.7;">({{ best_rows|length }})</span>{% endif %}
-  </button>
-  <button class="tab-btn" id="tab-momentum" onclick="setTab('momentum')">
-    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>Momentum
-    {% if mom_rows %}<span style="font-size:10px;opacity:.7;">({{ mom_rows|length }})</span>{% endif %}
-  </button>
-  <button class="tab-btn" id="tab-sleeping" onclick="setTab('sleeping')">
-    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>Sleeping Giants
-    {% if sleep_rows %}<span style="font-size:10px;opacity:.7;">({{ sleep_rows|length }})</span>{% endif %}
-  </button>
-  <button class="tab-btn" id="tab-under" onclick="setTab('under')">
-    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 3 9 21 6 12 2 12"/></svg>Underperforming
-    {% if under_rows %}<span style="font-size:10px;opacity:.7;">({{ under_rows|length }})</span>{% endif %}
-  </button>
-</div>
-</div>
+    {% include '_filter.html' with context %}
 
-<!-- ═══ BEST SELLERS ═══ -->
-<div id="pane-best">
-  <div id="best-table-view">
-    <div class="card" style="overflow:hidden;">
-      {% if best_rows %}
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th style="width:36px;">#</th><th>Product</th>
-            <th class="r">Qty Sold</th>
-            <th class="r">Revenue</th>
-            <th class="r">Avg Price</th>
-            <th class="r">Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in best_rows %}
-          <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
-            <td>
-              {% if r.rank == 1 %}
-              <span style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">1</span>
-              {% elif r.rank == 2 %}
-              <span style="background:#94a3b8;color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">2</span>
-              {% elif r.rank == 3 %}
-              <span style="background:#cd7c2f;color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">3</span>
-              {% else %}
-              <span style="color:#9ca3af;font-weight:600;font-size:12px;">{{ r.rank }}</span>
-              {% endif %}
-            </td>
-            <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
-            <td class="r">{{ '{:,.0f}'.format(r.qty|float) }}</td>
-            <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</td>
-            <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.avg_price|float) }}</td>
-            <td class="r">
-              <div class="score-bar">
-                <div class="score-bar-track"><div class="score-bar-fill" style="background:var(--p);width:{{ r.score }}%;"></div></div>
-                <span class="score-pill" style="background:#f5f0f4;color:var(--p);">{{ r.score }}%</span>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No sales data for this period.</div>
-      {% endif %}
-    </div>
-  </div>
-  <div id="best-chart-view" style="display:none;">
-    <div class="chart-2col">
-      <div class="card" style="padding:18px 20px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Revenue by Product — {{ filter_label }}</div>
-        <canvas id="bestBarChart" height="{% if best_rows|length > 10 %}160{% else %}120{% endif %}"></canvas>
-      </div>
-      <div class="card" style="padding:18px 20px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Revenue Share (Top 8)</div>
-        <canvas id="bestPieChart" height="200"></canvas>
+    <!-- Prof-tab bar -->
+    <div class="rank-tab-bar" style="margin-top:12px;">
+      <div style="display:flex;gap:4px;padding:4px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;width:max-content;min-width:100%;">
+        <button class="prof-tab active" id="tab-best" onclick="setTab('best')">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="18 20 18 10"/><polyline points="12 20 12 4"/><polyline points="6 20 6 14"/></svg>
+          Best Sellers
+          {% if best_rows %}<span style="font-size:10px;opacity:.7;">({{ best_rows|length }})</span>{% endif %}
+        </button>
+        <button class="prof-tab" id="tab-momentum" onclick="setTab('momentum')">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          Momentum
+          {% if mom_rows %}<span style="font-size:10px;opacity:.7;">({{ mom_rows|length }})</span>{% endif %}
+        </button>
+        <button class="prof-tab" id="tab-sleeping" onclick="setTab('sleeping')">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          Sleeping Giants
+          {% if sleep_rows %}<span style="font-size:10px;opacity:.7;">({{ sleep_rows|length }})</span>{% endif %}
+        </button>
+        <button class="prof-tab" id="tab-under" onclick="setTab('under')">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 3 9 21 6 12 2 12"/></svg>
+          Underperforming
+          {% if under_rows %}<span style="font-size:10px;opacity:.7;">({{ under_rows|length }})</span>{% endif %}
+        </button>
       </div>
     </div>
   </div>
-</div>
 
-<!-- ═══ MOMENTUM ═══ -->
-<div id="pane-momentum" style="display:none;">
-  <div id="mom-table-view">
-    <div class="card" style="overflow:hidden;">
-      {% if mom_rows %}
-      <table class="data-table">
-        <thead><tr><th>Product</th><th class="r">Prior</th><th class="r">Current</th><th class="r">Rev Δ</th><th class="r">Qty Δ</th><th class="r">Score</th></tr></thead>
-        <tbody>
-          {% for r in mom_rows %}
-          <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
-            <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
-            <td class="r" style="color:#9ca3af;">KSH {{ '{:,.0f}'.format(r.prev_rev|float) }}</td>
-            <td class="r" style="font-weight:600;">KSH {{ '{:,.0f}'.format(r.curr_rev|float) }}</td>
-            <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.rev_chg }}%</td>
-            <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.qty_chg }}%</td>
-            <td class="r">
-              <div class="score-bar">
-                <div class="score-bar-track"><div class="score-bar-fill" style="background:#059669;width:{{ r.score }}%;"></div></div>
-                <span class="score-pill" style="background:#d1fae5;color:#065f46;">{{ r.score }}%</span>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No momentum data — need sales in both current and prior period.</div>
-      {% endif %}
-    </div>
-  </div>
-  <div id="mom-chart-view" style="display:none;">
-    <div class="chart-2col">
-      <div class="card" style="padding:18px 20px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Prior vs Current Revenue</div>
-        <canvas id="momBarChart" height="{% if mom_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
-      </div>
-      <div class="card" style="padding:18px 20px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Growth Score</div>
-        <canvas id="momScoreChart" height="200"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
+  <!-- Tab panes -->
+  <div style="padding:18px 20px;">
 
-<!-- ═══ SLEEPING GIANTS ═══ -->
-<div id="pane-sleeping" style="display:none;">
-  <div id="sleep-table-view">
-    <div class="card" style="overflow:hidden;">
-      {% if sleep_rows %}
-      <table class="data-table">
-        <thead><tr><th>Product</th><th class="r">Peak Revenue</th><th class="r">Recent</th><th class="r">Decline</th><th class="c">Status</th></tr></thead>
-        <tbody>
-          {% for r in sleep_rows %}
-          <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
-            <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
-            <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.peak_rev|float) }}</td>
-            <td class="r">KSH {{ '{:,.0f}'.format(r.recent_rev|float) }}</td>
-            <td class="r">
-              <div class="score-bar" style="justify-content:flex-end;">
-                <div class="score-bar-track"><div class="score-bar-fill" style="background:#dc2626;width:{{ [r.decline_pct, 100]|min }}%;"></div></div>
-                <span class="score-pill" style="background:#fee2e2;color:#991b1b;font-family:monospace;">-{{ r.decline_pct }}%</span>
-              </div>
-            </td>
-            <td class="c">
-              {% if r.status == 'GONE SILENT' %}<span class="badge-critical">Gone Silent</span>
-              {% elif r.status == 'CRITICAL DROP' %}<span style="background:#fed7aa;color:#9a3412;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">Critical Drop</span>
-              {% else %}<span class="badge-warn">Declining</span>{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">Top products are holding steady.</div>
-      {% endif %}
-    </div>
-  </div>
-  <div id="sleep-chart-view" style="display:none;">
-    <div class="chart-2col">
-      <div class="card" style="padding:18px 20px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Peak vs Recent Revenue</div>
-        <canvas id="sleepBarChart" height="{% if sleep_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+    <!-- ═══ BEST SELLERS ═══ -->
+    <div id="pane-best">
+      <div id="best-table-view">
+        <div style="overflow:hidden;border-radius:8px;border:1px solid #e5e7eb;">
+          {% if best_rows %}
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:36px;">#</th><th>Product</th>
+                <th class="r">Qty Sold</th>
+                <th class="r">Revenue</th>
+                <th class="r">Avg Price</th>
+                <th class="r">Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in best_rows %}
+              <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
+                <td>
+                  {% if r.rank == 1 %}
+                  <span style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">1</span>
+                  {% elif r.rank == 2 %}
+                  <span style="background:#94a3b8;color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">2</span>
+                  {% elif r.rank == 3 %}
+                  <span style="background:#cd7c2f;color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">3</span>
+                  {% else %}
+                  <span style="color:#9ca3af;font-weight:600;font-size:12px;">{{ r.rank }}</span>
+                  {% endif %}
+                </td>
+                <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+                <td class="r">{{ '{:,.0f}'.format(r.qty|float) }}</td>
+                <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</td>
+                <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.avg_price|float) }}</td>
+                <td class="r">
+                  <div class="score-bar">
+                    <div class="score-bar-track"><div class="score-bar-fill" style="background:var(--p);width:{{ r.score }}%;"></div></div>
+                    <span class="score-pill" style="background:#f5f0f4;color:var(--p);">{{ r.score }}%</span>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No sales data for this period.</div>
+          {% endif %}
+        </div>
       </div>
-      <div class="card" style="padding:18px 20px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Decline %</div>
-        <canvas id="sleepDeclineChart" height="200"></canvas>
+      <div id="best-chart-view" style="display:none;">
+        <div class="chart-2col">
+          <div class="card" style="padding:18px 20px;">
+            <div class="section-title" style="margin-bottom:4px;">Revenue by Product</div>
+            <div class="section-sub" style="margin-bottom:14px;">{{ filter_label }}</div>
+            <canvas id="bestBarChart" height="{% if best_rows|length > 10 %}160{% else %}120{% endif %}"></canvas>
+          </div>
+          <div class="card" style="padding:18px 20px;">
+            <div class="section-title" style="margin-bottom:4px;">Revenue Share</div>
+            <div class="section-sub" style="margin-bottom:14px;">Top 8 products</div>
+            <canvas id="bestPieChart" height="200"></canvas>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- ═══ UNDERPERFORMING ═══ -->
-<div id="pane-under" style="display:none;">
-  <div id="under-table-view">
-    <div class="card" style="overflow:hidden;">
-      {% if under_rows %}
-      <table class="data-table">
-        <thead><tr><th>Product</th><th class="r">Expected</th><th class="r">Actual</th><th class="r">Drop</th><th class="c">Status</th></tr></thead>
-        <tbody>
-          {% for r in under_rows %}
-          <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
-            <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
-            <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.expected_rev|float) }}</td>
-            <td class="r">KSH {{ '{:,.0f}'.format(r.actual_rev|float) }}</td>
-            <td class="r">
-              <div class="score-bar" style="justify-content:flex-end;">
-                <div class="score-bar-track"><div class="score-bar-fill" style="background:#dc2626;width:{{ [r.drop_pct, 100]|min }}%;"></div></div>
-                <span class="score-pill" style="background:#fee2e2;color:#991b1b;font-family:monospace;">-{{ r.drop_pct }}%</span>
-              </div>
-            </td>
-            <td class="c">
-              {% if r.status == 'NO SALES' %}<span class="badge-critical">No Sales</span>
-              {% else %}<span class="badge-warn">Slow</span>{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">All products within normal range.</div>
-      {% endif %}
-    </div>
-  </div>
-  <div id="under-chart-view" style="display:none;">
-    <div class="chart-2col">
-      <div class="card" style="padding:18px 20px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Expected vs Actual Revenue</div>
-        <canvas id="underBarChart" height="{% if under_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+    <!-- ═══ MOMENTUM ═══ -->
+    <div id="pane-momentum" style="display:none;">
+      <div id="mom-table-view">
+        <div style="overflow:hidden;border-radius:8px;border:1px solid #e5e7eb;">
+          {% if mom_rows %}
+          <table class="data-table">
+            <thead><tr><th>Product</th><th class="r">Prior</th><th class="r">Current</th><th class="r">Rev Δ</th><th class="r">Qty Δ</th><th class="r">Score</th></tr></thead>
+            <tbody>
+              {% for r in mom_rows %}
+              <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
+                <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+                <td class="r" style="color:#9ca3af;">KSH {{ '{:,.0f}'.format(r.prev_rev|float) }}</td>
+                <td class="r" style="font-weight:600;">KSH {{ '{:,.0f}'.format(r.curr_rev|float) }}</td>
+                <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.rev_chg }}%</td>
+                <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.qty_chg }}%</td>
+                <td class="r">
+                  <div class="score-bar">
+                    <div class="score-bar-track"><div class="score-bar-fill" style="background:#059669;width:{{ r.score }}%;"></div></div>
+                    <span class="score-pill" style="background:#d1fae5;color:#065f46;">{{ r.score }}%</span>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div style="text-align:center;padding:60px;color:#9ca3af;font-size:14px;">No momentum data — need sales in both current and prior period.</div>
+          {% endif %}
+        </div>
       </div>
-      <div class="card" style="padding:18px 20px;">
-        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;">Drop %</div>
-        <canvas id="underDropChart" height="200"></canvas>
+      <div id="mom-chart-view" style="display:none;">
+        <div class="chart-2col">
+          <div class="card" style="padding:18px 20px;">
+            <div class="section-title" style="margin-bottom:4px;">Prior vs Current Revenue</div>
+            <div class="section-sub" style="margin-bottom:14px;">Period comparison</div>
+            <canvas id="momBarChart" height="{% if mom_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+          </div>
+          <div class="card" style="padding:18px 20px;">
+            <div class="section-title" style="margin-bottom:4px;">Growth Score</div>
+            <div class="section-sub" style="margin-bottom:14px;">Momentum index</div>
+            <canvas id="momScoreChart" height="200"></canvas>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
+
+    <!-- ═══ SLEEPING GIANTS ═══ -->
+    <div id="pane-sleeping" style="display:none;">
+      <div id="sleep-table-view">
+        <div style="overflow:hidden;border-radius:8px;border:1px solid #e5e7eb;">
+          {% if sleep_rows %}
+          <table class="data-table">
+            <thead><tr><th>Product</th><th class="r">Peak Revenue</th><th class="r">Recent</th><th class="r">Decline</th><th class="c">Status</th></tr></thead>
+            <tbody>
+              {% for r in sleep_rows %}
+              <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
+                <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+                <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.peak_rev|float) }}</td>
+                <td class="r">KSH {{ '{:,.0f}'.format(r.recent_rev|float) }}</td>
+                <td class="r">
+                  <div class="score-bar" style="justify-content:flex-end;">
+                    <div class="score-bar-track"><div class="score-bar-fill" style="background:#dc2626;width:{{ [r.decline_pct, 100]|min }}%;"></div></div>
+                    <span class="score-pill" style="background:#fee2e2;color:#991b1b;font-family:monospace;">-{{ r.decline_pct }}%</span>
+                  </div>
+                </td>
+                <td class="c">
+                  {% if r.status == 'GONE SILENT' %}<span class="badge-critical">Gone Silent</span>
+                  {% elif r.status == 'CRITICAL DROP' %}<span style="background:#fed7aa;color:#9a3412;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">Critical Drop</span>
+                  {% else %}<span class="badge-warn">Declining</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">Top products are holding steady.</div>
+          {% endif %}
+        </div>
+      </div>
+      <div id="sleep-chart-view" style="display:none;">
+        <div class="chart-2col">
+          <div class="card" style="padding:18px 20px;">
+            <div class="section-title" style="margin-bottom:4px;">Peak vs Recent Revenue</div>
+            <div class="section-sub" style="margin-bottom:14px;">Sleeping giants analysis</div>
+            <canvas id="sleepBarChart" height="{% if sleep_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+          </div>
+          <div class="card" style="padding:18px 20px;">
+            <div class="section-title" style="margin-bottom:4px;">Decline %</div>
+            <div class="section-sub" style="margin-bottom:14px;">Drop from peak</div>
+            <canvas id="sleepDeclineChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ UNDERPERFORMING ═══ -->
+    <div id="pane-under" style="display:none;">
+      <div id="under-table-view">
+        <div style="overflow:hidden;border-radius:8px;border:1px solid #e5e7eb;">
+          {% if under_rows %}
+          <table class="data-table">
+            <thead><tr><th>Product</th><th class="r">Expected</th><th class="r">Actual</th><th class="r">Drop</th><th class="c">Status</th></tr></thead>
+            <tbody>
+              {% for r in under_rows %}
+              <tr style="cursor:pointer;" onclick="selectProductByName('{{ r.product | e }}')">
+                <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
+                <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.expected_rev|float) }}</td>
+                <td class="r">KSH {{ '{:,.0f}'.format(r.actual_rev|float) }}</td>
+                <td class="r">
+                  <div class="score-bar" style="justify-content:flex-end;">
+                    <div class="score-bar-track"><div class="score-bar-fill" style="background:#dc2626;width:{{ [r.drop_pct, 100]|min }}%;"></div></div>
+                    <span class="score-pill" style="background:#fee2e2;color:#991b1b;font-family:monospace;">-{{ r.drop_pct }}%</span>
+                  </div>
+                </td>
+                <td class="c">
+                  {% if r.status == 'NO SALES' %}<span class="badge-critical">No Sales</span>
+                  {% else %}<span class="badge-warn">Slow</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div style="text-align:center;padding:60px;color:#059669;font-size:14px;">All products within normal range.</div>
+          {% endif %}
+        </div>
+      </div>
+      <div id="under-chart-view" style="display:none;">
+        <div class="chart-2col">
+          <div class="card" style="padding:18px 20px;">
+            <div class="section-title" style="margin-bottom:4px;">Expected vs Actual Revenue</div>
+            <div class="section-sub" style="margin-bottom:14px;">Underperformance analysis</div>
+            <canvas id="underBarChart" height="{% if under_rows|length > 8 %}160{% else %}120{% endif %}"></canvas>
+          </div>
+          <div class="card" style="padding:18px 20px;">
+            <div class="section-title" style="margin-bottom:4px;">Drop %</div>
+            <div class="section-sub" style="margin-bottom:14px;">Gap from expected</div>
+            <canvas id="underDropChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab panes -->
 </div>
 
 <script>
@@ -478,7 +575,7 @@ const builtCharts = {};
 
 document.getElementById('ai-btn-wrap').innerHTML =
   `<button onclick="loadExplain('best')" title="AI Insight"
-    style="background:linear-gradient(135deg,var(--p),var(--pd));color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px var(--p-a30);">
+    style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;">
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
       <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
     </svg>AI Insight</button>`;
@@ -585,7 +682,7 @@ function renderProfile(d) {
       data: {
         labels,
         datasets: [
-          { type:'bar',  label:'Revenue', data:revs, backgroundColor:'THEME.alpha(.55)', borderColor:THEME.p(), borderWidth:1, borderRadius:3, yAxisID:'y' },
+          { type:'bar',  label:'Revenue', data:revs, backgroundColor:THEME.alpha(.55), borderColor:THEME.p(), borderWidth:1, borderRadius:3, yAxisID:'y' },
           { type:'line', label:'Units',   data:qtys, borderColor:'#059669', backgroundColor:'rgba(5,150,105,.08)', borderWidth:2, pointRadius:3, tension:.35, fill:true, yAxisID:'y2' }
         ]
       },
@@ -698,7 +795,7 @@ function buildCharts(tab) {
     const labels = momData.map(r => r.product.length>20?r.product.slice(0,20)+'…':r.product);
     new Chart(document.getElementById('momBarChart').getContext('2d'), {
       type:'bar', data:{labels, datasets:[
-        {label:'Prior',data:momData.map(r=>parseFloat(r.prev_rev)),backgroundColor:'THEME.alpha(.35)',borderColor:THEME.p(),borderWidth:1,borderRadius:3},
+        {label:'Prior',data:momData.map(r=>parseFloat(r.prev_rev)),backgroundColor:THEME.alpha(.35),borderColor:THEME.p(),borderWidth:1,borderRadius:3},
         {label:'Current',data:momData.map(r=>parseFloat(r.curr_rev)),backgroundColor:'rgba(5,150,105,.7)',borderColor:'#059669',borderWidth:1,borderRadius:3}
       ]},
       options:{indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
@@ -714,7 +811,7 @@ function buildCharts(tab) {
     const labels = sleepData.map(r => r.product.length>20?r.product.slice(0,20)+'…':r.product);
     new Chart(document.getElementById('sleepBarChart').getContext('2d'), {
       type:'bar', data:{labels, datasets:[
-        {label:'Peak',data:sleepData.map(r=>parseFloat(r.peak_rev)),backgroundColor:'THEME.alpha(.35)',borderColor:THEME.p(),borderWidth:1,borderRadius:3},
+        {label:'Peak',data:sleepData.map(r=>parseFloat(r.peak_rev)),backgroundColor:THEME.alpha(.35),borderColor:THEME.p(),borderWidth:1,borderRadius:3},
         {label:'Recent',data:sleepData.map(r=>parseFloat(r.recent_rev)),backgroundColor:'rgba(220,38,38,.65)',borderColor:'#dc2626',borderWidth:1,borderRadius:3}
       ]},
       options:{indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},

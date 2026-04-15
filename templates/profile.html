@@ -556,8 +556,9 @@
 
 <script>
 // ── Data from server ─────────────────────────────────
-const monthlyData = {{ stats.get('monthly', []) | tojson }};
-const catData     = {{ stats.get('categories', []) | tojson }};
+const monthlyData       = {{ stats.get('monthly', []) | tojson }};
+const monthlySamePeriod = {{ (monthly_same_period or {}) | tojson }};  // {YYYY-MM: revenue} up to today's day-of-month
+const catData           = {{ stats.get('categories', []) | tojson }};
 const expData     = {{ stats.get('expense_breakdown', []) | tojson }};
 
 // ── Palette ──────────────────────────────────────────
@@ -611,25 +612,73 @@ function buildLegend(containerId, labels, values, palette, fmt) {
 (function() {
   const ctx = document.getElementById('monthlyChart');
   if (!ctx || !monthlyData.length) return;
+
+  // Ghost data: for each month bar, show the PREVIOUS month's revenue up to the same day-of-month
+  // e.g. April bar → what March had earned by day 15 (today's date)
+  const ghostData = monthlyData.map((d, i) => {
+    if (i === 0) return null;
+    const prevMonth = monthlyData[i - 1].month;   // e.g. '2026-03' for April's bar
+    return monthlySamePeriod[prevMonth] ?? null;
+  });
+
+  // Plugin: draws dotted amber outline at same-period height behind each bar
+  const ghostPlugin = {
+    id: 'ghostBars',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      const meta = chart.getDatasetMeta(0);
+      meta.data.forEach((bar, i) => {
+        const ghost = ghostData[i];
+        if (ghost == null || ghost <= 0) return;
+        const x    = bar.x;
+        const w    = bar.width;
+        const base = bar.base;
+        const yPos = chart.scales.y.getPixelForValue(ghost);
+        ctx.save();
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = 'rgba(234,179,8,0.9)';   // amber / yellow
+        ctx.lineWidth   = 2;
+        ctx.fillStyle   = 'rgba(234,179,8,0.08)';
+        ctx.fillRect(x - w / 2, yPos, w, base - yPos);
+        ctx.strokeRect(x - w / 2, yPos, w, base - yPos);
+        ctx.restore();
+      });
+    }
+  };
+
   new Chart(ctx, {
     type: 'bar',
+    plugins: [ghostPlugin],
     data: {
       labels: monthlyData.map(d => d.month),
       datasets: [{
         label: 'Revenue (KES)',
         data: monthlyData.map(d => d.revenue),
-        backgroundColor: THEME.alpha(0.18),
+        backgroundColor: THEME.alpha(0.72),
         borderColor: THEME.p(),
         borderWidth: 2,
         borderRadius: 5,
-        hoverBackgroundColor: THEME.alpha(0.35)
+        hoverBackgroundColor: THEME.alpha(0.9),
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false }, tooltip: {
-        callbacks: { label: c => ` KES ${c.parsed.y.toLocaleString()}` }
-      }},
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => ` KES ${c.parsed.y.toLocaleString()}`,
+            afterLabel: c => {
+              const ghost = ghostData[c.dataIndex];
+              if (ghost == null || ghost <= 0) return '';
+              const diff = c.parsed.y - ghost;
+              const sign = diff >= 0 ? '+' : '';
+              const today = new Date();
+              return ` Same period last yr/mo (day 1–${today.getDate()}): KES ${ghost.toLocaleString()} (${sign}${((diff/ghost)*100).toFixed(1)}%)`;
+            }
+          }
+        }
+      },
       scales: {
         y: { ticks: { callback: v => 'KES ' + (v/1000).toFixed(0) + 'k', font: { size: 11 } }, grid: { color: '#f3f4f6' } },
         x: { ticks: { font: { size: 11 } }, grid: { display: false } }

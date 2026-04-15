@@ -2000,6 +2000,16 @@ def profile():
         if r5: stats['total_imports'] = r5[0]['total_imports']
         monthly = query("SELECT TO_CHAR(date_trunc('month',date_order),'YYYY-MM') AS month, ROUND(SUM(amount_total)::numeric,0) AS revenue FROM sale_order WHERE state IN ('sale','done') GROUP BY 1 ORDER BY 1")
         stats['monthly'] = [{'month': r['month'], 'revenue': float(r['revenue'] or 0)} for r in monthly]
+        # Same-period revenue: each month summed only up to today's day-of-month
+        same_period = query("""
+            SELECT TO_CHAR(date_trunc('month',date_order),'YYYY-MM') AS month,
+                   ROUND(SUM(amount_total)::numeric,0) AS revenue
+            FROM sale_order
+            WHERE state IN ('sale','done')
+              AND EXTRACT(DAY FROM date_order) <= EXTRACT(DAY FROM CURRENT_DATE)
+            GROUP BY 1 ORDER BY 1
+        """)
+        stats['monthly_same_period'] = {r['month']: float(r['revenue'] or 0) for r in same_period}
         cats = query("SELECT pc.name AS category, COUNT(DISTINCT pt.id) AS products FROM product_template pt JOIN product_category pc ON pc.id=pt.categ_id WHERE pt.active=true AND pc.name NOT IN ('All','Expenses','Deliveries') GROUP BY 1 ORDER BY 2 DESC")
         stats['categories'] = [{'name': r['category'], 'count': int(r['products'])} for r in cats]
         expenses = query("SELECT LOWER(rp.name) AS vendor, ROUND(SUM(CASE WHEN aml.display_type='product' THEN aml.price_subtotal ELSE 0 END)::numeric,0) AS total FROM account_move am JOIN account_move_line aml ON aml.move_id=am.id JOIN res_partner rp ON rp.id=am.partner_id WHERE am.move_type='in_invoice' AND am.state='posted' AND LOWER(rp.name) NOT ILIKE '%chinaland%' AND LOWER(rp.name) NOT ILIKE '%kaboww%' GROUP BY 1 ORDER BY 2 DESC LIMIT 7")
@@ -2012,7 +2022,8 @@ def profile():
     today = date.today().isoformat()
     return render_template('profile.html', stats=stats,
                            split_shop=split_shop, split_kemboi=split_kemboi, split_mutai=split_mutai,
-                           meetings=meetings, today=today, monthly_target=monthly_target, **ctx)
+                           meetings=meetings, today=today, monthly_target=monthly_target,
+                           monthly_same_period=stats.get('monthly_same_period', {}), **ctx)
 
 
 @app.route('/api/profile/save-ownership', methods=['POST'])
@@ -2982,6 +2993,7 @@ _training_state: dict = {
     # Gemini post-training review
     'gemini_review_status': None,  # None | 'running' | 'done' | 'error: ...' | 'skipped: ...'
     'gemini_aliases': [],          # reviewed alias list from Gemini
+    'db_error': None,              # set when Odoo DB connection fails during training
 }
 _training_lock = threading.Lock()
 _TRAINING_CACHE_FILE = '.pwtraining_cache.json'
@@ -3158,7 +3170,12 @@ def _lookup_odoo_receipt(cfg, receipt_no, receipt_date, receipt_total=None):
 
         cur.close(); conn.close()
     except Exception as e:
-        print(f'odoo lookup error: {e}')
+        err = str(e)
+        print(f'odoo lookup error: {err}')
+        # Surface DB connection errors to the training UI
+        with _training_lock:
+            if 'Connection refused' in err or 'could not connect' in err.lower():
+                _training_state['db_error'] = f'Cannot reach Odoo DB ({cfg.get("host","?")}:{cfg.get("port","?")}): {err}'
     return [], 'none'
 
 
@@ -3305,6 +3322,7 @@ def _run_training(folder_path, session_id, db_cfg, resume=False):
             'live_feed': [],
             'current': '', 'current_image': None,
             'folder_path': folder_path,
+            'db_error': None,
         })
 
     def _process_receipts_raw(fn, receipts_raw, db_cfg):
@@ -4184,12 +4202,19 @@ def not_found(e):
 @app.errorhandler(500)
 def server_error(e):
     if request.path.startswith('/api/'):
-        return jsonify({'error': 'Internal server error'}), 500
-    _env = session.get('env', 'production')
-    env_info = AVAILABLE_ENVS.get(_env, AVAILABLE_ENVS['production'])
-    return render_template('dashboard.html', error=str(e),
-                           active_env=_env, env_label=env_info['label'],
-                           env_color=env_info['color'], env_options=AVAILABLE_ENVS), 500
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+    # Return a plain error page — never render a full template here (it may itself crash)
+    html = f"""<!doctype html><html><head><title>Error</title>
+    <style>body{{font-family:sans-serif;padding:40px;background:#f9fafb;color:#111827}}
+    .box{{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;max-width:560px;margin:auto}}
+    h2{{color:#dc2626;margin-top:0}}pre{{background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto}}
+    a{{color:#7c3aed;font-weight:600}}</style></head>
+    <body><div class="box">
+    <h2>Something went wrong</h2>
+    <p>The page hit an unexpected error. <a href="/dashboard">Go to Dashboard</a></p>
+    <pre>{str(e)}</pre>
+    </div></body></html>"""
+    return html, 500
 
 
 if __name__ == '__main__':

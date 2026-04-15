@@ -157,7 +157,7 @@ new Chart(document.getElementById('projChart').getContext('2d'), {
         label: 'Historical',
         data: histFull,
         borderColor: THEME.p(),
-        backgroundColor: 'THEME.alpha(.05)',
+        backgroundColor: THEME.alpha(.05),
         fill: true, tension: 0.3,
         pointRadius: histDates.length > 60 ? 0 : 2,
         borderWidth: 2, spanGaps: false,
