@@ -2744,6 +2744,26 @@ def _call_gemini(pil_img, prompt: str):
     return parsed if isinstance(parsed, list) else [parsed]
 
 
+# ── Receipt date validator ──────────────────────────────────────
+
+def _validate_receipt_date(date_str):
+    """Return date string if valid for Party World (opened 2025-04-01), else None.
+    Rejects: dates before 2025-04-01 (OCR misreads of handwriting), dates >60 days future.
+    """
+    if not date_str:
+        return None
+    try:
+        from datetime import date as _date, timedelta
+        d = _date.fromisoformat(str(date_str)[:10])
+        if d < _date(2025, 4, 1):
+            return None   # pre-opening date — definitely a misread
+        if d > _date.today() + timedelta(days=60):
+            return None   # implausible future date — misread
+        return str(date_str)[:10]
+    except Exception:
+        return None
+
+
 # ── Prompt builders ────────────────────────────────────────────
 
 _RECEIPT_RULES = """Rules:
@@ -2755,7 +2775,8 @@ _RECEIPT_RULES = """Rules:
 - HIGH: code or name clearly matches. MEDIUM: partial/prefix/price match. LOW: best guess.
 - null matched_product only when truly zero resemblance
 - Use receipt price for line_total if different from catalog
-- Dates written as D/M/YY"""
+- Dates written as D/M/YY
+- DATE RANGE: Party World opened April 2025. Any date before 2025-04-01 is a misread — output null for date. Dates more than 2 months in the future are also misreads — output null."""
 
 def _prompt_gemini_only(catalog_compact: str) -> str:
     return f"""You are an OCR and product matching assistant for Party World Shop, Nairobi.
@@ -2788,7 +2809,8 @@ Rules:
 - Extract EVERY receipt — do not skip any
 - RECEIPT NUMBER: 4-digit serial near BOTTOM. NOT the date.
 - raw_text: copy exactly what is handwritten, do not interpret or clean up
-- Dates written as D/M/YY"""
+- Dates written as D/M/YY
+- DATE RANGE: Party World opened April 2025. Any date before 2025-04-01 is a misread — output null. Dates more than 2 months in the future are also misreads — output null."""
 
 
 def _prompt_resolve_ambiguous(ambiguous_items: list) -> str:
@@ -3409,7 +3431,7 @@ def _run_training(folder_path, session_id, db_cfg, resume=False):
         receipt_results = []
         for receipt in receipts_raw:
             receipt_no    = receipt.get('receipt_no')
-            receipt_date  = receipt.get('date')
+            receipt_date  = _validate_receipt_date(receipt.get('date'))  # reject pre-2025 / far-future misreads
             receipt_total = receipt.get('total_written')
             items         = receipt.get('items', [])
             odoo_lines, match_quality = _lookup_odoo_receipt(
@@ -3420,9 +3442,15 @@ def _run_training(folder_path, session_id, db_cfg, resume=False):
             total_c = len([c for c in comparison if c['result'] != 'missed'])
 
             # Collect alias suggestions from wrong_product results
+            # Skip HIGH-confidence scanner matches — those are price-fallback pairing noise,
+            # not genuine misidentifications. Only LOW/MEDIUM scanner confidence is worth reviewing.
             with _training_lock:
                 for c in comparison:
                     if c['result'] == 'wrong_product' and c['raw_text'] and c['odoo']['variant_id']:
+                        scanner_conf = (c.get('scanner') or {}).get('confidence', 'LOW')
+                        scanner_vid  = (c.get('scanner') or {}).get('variant_id')
+                        if scanner_conf == 'HIGH' and scanner_vid:
+                            continue  # scanner already confident → pairing mismatch is comparison noise
                         key = f"{c['raw_text'].strip().lower()}|{c['odoo']['variant_id']}"
                         s   = _training_state['alias_suggestions']
                         if key not in s:
@@ -3686,9 +3714,29 @@ def _gemini_review_aliases():
             'key':          key,
         })
 
-    # Build prompt items (cap at 200 to avoid token limits)
+    # Build existing-alias set so we don't waste Gemini budget re-reviewing already-applied aliases
+    existing_aliases: set = set()
+    for p in _CATALOG:
+        existing_aliases.add(p.get('name', '').lower())
+        for a in (p.get('aliases') or '').split(','):
+            a = a.strip().lower()
+            if a:
+                existing_aliases.add(a)
+
+    # Filter to only genuinely new raw texts, sorted by frequency desc, cap at 500
+    new_candidates = {
+        raw: cands for raw, cands in raw_to_candidates.items()
+        if raw.lower() not in existing_aliases
+    }
+    sorted_new = sorted(
+        new_candidates.items(),
+        key=lambda x: sum(c['count'] for c in x[1]),
+        reverse=True
+    )
+
+    # Build prompt items (up to 500 new aliases — already-aliased ones filtered out)
     items = []
-    for raw, candidates in list(raw_to_candidates.items())[:200]:
+    for raw, candidates in sorted_new[:500]:
         # Pick highest-count candidate as primary suggestion
         best = max(candidates, key=lambda c: c['count'])
         items.append({
