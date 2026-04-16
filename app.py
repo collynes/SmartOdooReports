@@ -3297,8 +3297,19 @@ def _compare_receipt(scanned_items, odoo_lines):
             total = None
         unit  = (total / qty) if total and qty else None
 
-        fm         = _fuzzy_match_item(raw, qty, total)
-        scanner_id = fm['product']['id'] if fm['product'] else None
+        # Use Gemini pre-matched product if available (gemini_match training mode),
+        # otherwise fall back to rapidfuzz
+        pre_match = item.get('matched_product')
+        if pre_match and pre_match.get('variant_id'):
+            scanner_id = int(pre_match['variant_id'])
+            fm = {
+                'product': {'id': scanner_id, 'name': pre_match.get('name', '')},
+                'confidence': item.get('confidence', 'HIGH'),
+                'score': 100,
+            }
+        else:
+            fm         = _fuzzy_match_item(raw, qty, total)
+            scanner_id = fm['product']['id'] if fm['product'] else None
 
         # Find best Odoo match — first by product_id, then by price
         odoo_match = None
@@ -3396,8 +3407,10 @@ def _save_run_record(state, session_id, stopped=False):
         print(f'_save_run_record error: {e}')
 
 
-def _run_training(folder_path, session_id, db_cfg, resume=False):
-    """Background thread: scan all images, compare to Odoo, collect alias suggestions."""
+def _run_training(folder_path, session_id, db_cfg, resume=False, training_mode='extract_only'):
+    """Background thread: scan all images, compare to Odoo, collect alias suggestions.
+    training_mode: 'extract_only' (rapidfuzz matching) | 'gemini_match' (Gemini does product matching)
+    """
     import PIL.Image
     supported = {'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.bmp'}
     images    = sorted([
@@ -3405,6 +3418,7 @@ def _run_training(folder_path, session_id, db_cfg, resume=False):
         if os.path.splitext(fn.lower())[1] in supported
     ])
     api_key = os.getenv('GEMINI_API_KEY', '')
+    use_gemini_match = (training_mode == 'gemini_match')
 
     # Load cache for resume — cache contains only raw OCR results (no comparison)
     # Comparison is ALWAYS re-run fresh so new aliases take effect every run
@@ -3423,6 +3437,7 @@ def _run_training(folder_path, session_id, db_cfg, resume=False):
             'live_feed': [],
             'current': '', 'current_image': None,
             'folder_path': folder_path,
+            'training_mode': training_mode,
             'db_error': None,
         })
 
@@ -3450,7 +3465,9 @@ def _run_training(folder_path, session_id, db_cfg, resume=False):
                         scanner_conf = (c.get('scanner') or {}).get('confidence', 'LOW')
                         scanner_vid  = (c.get('scanner') or {}).get('variant_id')
                         if scanner_conf == 'HIGH' and scanner_vid:
-                            continue  # scanner already confident → pairing mismatch is comparison noise
+                            continue  # scanner already HIGH confident → pairing mismatch is comparison noise
+                        # MEDIUM with a match is borderline — skip only if same product already matched elsewhere
+                        # LOW always passes through as a genuine alias candidate
                         key = f"{c['raw_text'].strip().lower()}|{c['odoo']['variant_id']}"
                         s   = _training_state['alias_suggestions']
                         if key not in s:
@@ -3586,12 +3603,23 @@ def _run_training(folder_path, session_id, db_cfg, resume=False):
                                                     'reason': ocr.get('reason', ''), 'receipts_raw': []})
                 continue
 
-            pil_img      = PIL.Image.open(_io.BytesIO(img_bytes))
-            receipts_raw = _call_gemini(pil_img, _prompt_extract_only()) if api_key else []
+            pil_img = PIL.Image.open(_io.BytesIO(img_bytes))
+            if api_key:
+                if use_gemini_match:
+                    # Gemini does full product matching — higher accuracy, catalog-dependent cache
+                    receipts_raw = _call_gemini(pil_img, _prompt_gemini_only(_catalog_compact()))
+                else:
+                    # Extract only — catalog-independent, comparison re-runs on resume
+                    receipts_raw = _call_gemini(pil_img, _prompt_extract_only())
+            else:
+                receipts_raw = []
 
-            # Save OCR results to cache (catalog-independent)
+            # Save OCR results to cache
+            # Note: gemini_match results are catalog-dependent — resume will still use cached results
+            # but a catalog change may reduce effectiveness (clear cache to re-scan)
             _save_cache_entry(folder_path, fn, {'file': fn, 'status': 'scanned',
-                                                 'receipts_raw': receipts_raw})
+                                                 'receipts_raw': receipts_raw,
+                                                 'training_mode': training_mode})
 
             receipt_results = _process_receipts_raw(fn, receipts_raw, db_cfg)
             entry = {'file': fn, 'status': 'scanned', 'receipts': receipt_results}
@@ -3657,7 +3685,9 @@ def _run_training(folder_path, session_id, db_cfg, resume=False):
     try:
         _gemini_review_aliases()
     except Exception as e:
+        import traceback
         print(f'gemini alias review error: {e}')
+        traceback.print_exc()
         with _training_lock:
             _training_state['gemini_review_status'] = f'error: {e}'
 
@@ -3667,7 +3697,9 @@ def _gemini_review_thread():
     try:
         _gemini_review_aliases()
     except Exception as e:
+        import traceback
         print(f'gemini review thread error: {e}')
+        traceback.print_exc()
         with _training_lock:
             _training_state['gemini_review_status'] = f'error: {e}'
 
@@ -3718,10 +3750,12 @@ def _gemini_review_aliases():
     existing_aliases: set = set()
     for p in _CATALOG:
         existing_aliases.add(p.get('name', '').lower())
-        for a in (p.get('aliases') or '').split(','):
-            a = a.strip().lower()
+        aliases = p.get('aliases') or []
+        if isinstance(aliases, str):
+            aliases = [a.strip() for a in aliases.split(',') if a.strip()]
+        for a in aliases:
             if a:
-                existing_aliases.add(a)
+                existing_aliases.add(a.strip().lower())
 
     # Filter to only genuinely new raw texts, sorted by frequency desc, cap at 500
     new_candidates = {
@@ -3919,9 +3953,12 @@ def receipts_training():
 @app.route('/api/receipts/training/start', methods=['POST'])
 @login_required
 def training_start():
-    data        = request.get_json() or {}
-    folder_path = data.get('folder', '').strip()
-    resume      = bool(data.get('resume', False))
+    data          = request.get_json() or {}
+    folder_path   = data.get('folder', '').strip()
+    resume        = bool(data.get('resume', False))
+    training_mode = data.get('mode', 'extract_only')  # 'extract_only' | 'gemini_match'
+    if training_mode not in ('extract_only', 'gemini_match'):
+        training_mode = 'extract_only'
 
     if not folder_path or not os.path.isdir(folder_path):
         return jsonify({'error': f'Folder not found: {folder_path}'}), 400
@@ -3941,10 +3978,10 @@ def training_start():
     db_cfg = get_active_db_config()
     t = threading.Thread(target=_run_training,
                          args=(folder_path, session_id, db_cfg),
-                         kwargs={'resume': resume}, daemon=True)
+                         kwargs={'resume': resume, 'training_mode': training_mode}, daemon=True)
     t.start()
     return jsonify({'session_id': session_id, 'folder': folder_path,
-                    'resume': resume, 'cached': cached_count})
+                    'resume': resume, 'cached': cached_count, 'mode': training_mode})
 
 
 @app.route('/api/receipts/training/pause', methods=['POST'])
