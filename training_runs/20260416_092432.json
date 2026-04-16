@@ -1,0 +1,27 @@
+{
+  "session_id": "20260416_092432",
+  "folder": "/Users/collinsk/Documents/com.collins/com.reports/trainingdata/all",
+  "started_at": "2026-04-16T09:24:32.086970",
+  "finished_at": "2026-04-16T10:51:36.088893",
+  "stopped": false,
+  "total_images": 908,
+  "processed": 908,
+  "skipped": 0,
+  "summary": {
+    "receipts_scanned": 899,
+    "not_receipts": 0,
+    "errors": 9,
+    "total_items": 8955,
+    "correct": 3172,
+    "accuracy": 35.4,
+    "alias_suggestions": 1825
+  },
+  "counters": {
+    "scanned": 899,
+    "receipt_no": 1373,
+    "date_total": 61,
+    "not_found": 136,
+    "errors": 9,
+    "not_receipt": 0
+  }
+}
