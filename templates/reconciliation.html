@@ -57,6 +57,14 @@
 .alias-input:focus { border-color:#8b5cf6; }
 .product-select { flex:2; min-width:200px; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; background:#fff; }
 .product-select:focus { border-color:#8b5cf6; }
+/* Autocomplete dropdown */
+.ac-wrap     { flex:2; min-width:200px; position:relative; }
+.ac-input    { width:100%; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box; }
+.ac-input:focus { border-color:#8b5cf6; }
+.ac-dropdown { position:absolute; top:calc(100% + 2px); left:0; right:0; background:#fff; border:1.5px solid #8b5cf6; border-radius:8px; max-height:220px; overflow-y:auto; z-index:999; box-shadow:0 4px 16px rgba(0,0,0,.12); }
+.ac-option   { padding:8px 12px; font-size:13px; cursor:pointer; color:#1e293b; }
+.ac-option:hover, .ac-option.highlighted { background:#ede9fe; }
+.ac-option small { color:#94a3b8; }
 .btn-resolve { padding:8px 18px; background:#6d28d9; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background .15s; white-space:nowrap; }
 .btn-resolve:hover { background:#5b21b6; }
 .btn-resolve:disabled { background:#c4b5fd; cursor:not-allowed; }
@@ -158,7 +166,8 @@ let modalFile  = '';
 
 // ── Boot ─────────────────────────────────────────────────────
 async function init() {
-  await Promise.all([loadCatalog(), loadData()]);
+  await loadCatalog();   // catalog must be ready before renderList() builds dropdowns
+  await loadData();
 }
 
 async function loadCatalog() {
@@ -268,18 +277,24 @@ function cardHTML(item) {
       <button class="btn-skip" style="font-size:11px;padding:4px 10px;" onclick="undoSkip('${item.id}')">Undo</button>
     </div>`;
   } else {
-    // Build product options — pre-select suggested
-    const opts = catalog.map(p =>
-      `<option value="${p.id}" ${p.id === item.suggested_product_id ? 'selected' : ''}>${p.name}${p.code ? ' ('+p.code+')' : ''}</option>`
-    ).join('');
+    // Pre-fill suggested product name
+    const suggested = catalog.find(p => p.id === item.suggested_product_id);
+    const suggestedName = suggested ? `${suggested.name}${suggested.code ? ' ('+suggested.code+')' : ''}` : '';
 
     actionArea = `<div class="resolve-form">
       <input class="alias-input" id="alias-${item.id}" type="text" placeholder="Alias text (as written on receipt)"
              value="${escHtml(item.raw_text)}" />
-      <select class="product-select" id="prod-${item.id}">
-        <option value="">— select correct product —</option>
-        ${opts}
-      </select>
+      <div class="ac-wrap">
+        <input class="ac-input" id="prod-search-${item.id}" type="text"
+               placeholder="Search product…"
+               value="${escHtml(suggestedName)}"
+               autocomplete="off"
+               oninput="acFilter('${item.id}', this.value)"
+               onfocus="acFilter('${item.id}', this.value)"
+               onblur="setTimeout(()=>acClose('${item.id}'),200)" />
+        <input type="hidden" id="prod-${item.id}" value="${item.suggested_product_id || ''}" />
+        <div class="ac-dropdown" id="ac-drop-${item.id}" style="display:none;"></div>
+      </div>
       <button class="btn-resolve" onclick="resolve('${item.id}')">Resolve</button>
       <button class="btn-skip" onclick="skip('${item.id}')">Skip</button>
     </div>`;
@@ -440,6 +455,34 @@ function showToast(msg, type) {
 
 function escHtml(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Autocomplete ───────────────────────────────────────────────
+function acFilter(id, query) {
+  const drop = document.getElementById(`ac-drop-${id}`);
+  if (!drop) return;
+  const q = query.toLowerCase().trim();
+  const matches = q
+    ? catalog.filter(p => p.name.toLowerCase().includes(q) || (p.code||'').toLowerCase().includes(q)).slice(0, 20)
+    : catalog.slice(0, 20);
+  if (!matches.length) { drop.style.display = 'none'; return; }
+  drop.innerHTML = matches.map(p =>
+    `<div class="ac-option" onmousedown="acSelect('${id}',${p.id},'${escHtml(p.name+(p.code?' ('+p.code+')':''))}')">
+      ${escHtml(p.name)} ${p.code ? `<small>(${escHtml(p.code)})</small>` : ''}
+     </div>`
+  ).join('');
+  drop.style.display = 'block';
+}
+
+function acSelect(id, productId, productName) {
+  document.getElementById(`prod-${id}`).value         = productId;
+  document.getElementById(`prod-search-${id}`).value  = productName;
+  document.getElementById(`ac-drop-${id}`).style.display = 'none';
+}
+
+function acClose(id) {
+  const drop = document.getElementById(`ac-drop-${id}`);
+  if (drop) drop.style.display = 'none';
 }
 
 async function regenerate() {
