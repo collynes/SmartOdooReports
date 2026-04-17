@@ -3103,6 +3103,7 @@ _training_state: dict = {
 _training_lock = threading.Lock()
 _TRAINING_CACHE_FILE = '.pwtraining_cache.json'
 _TRAINING_RUNS_DIR   = os.path.join(os.path.dirname(__file__), 'training_runs')
+_RECONCILIATION_PATH = os.path.join(os.path.dirname(__file__), 'reconciliation.json')
 os.makedirs(_TRAINING_RUNS_DIR, exist_ok=True)
 
 
@@ -3719,6 +3720,115 @@ def _run_training(folder_path, session_id, db_cfg, resume=False, training_mode='
         with _training_lock:
             _training_state['gemini_review_status'] = f'error: {e}'
 
+    # ── Generate reconciliation file ──────────────────────────
+    try:
+        with _training_lock:
+            state_snapshot = dict(_training_state)
+        _generate_reconciliation(state_snapshot)
+    except Exception as e:
+        print(f'reconciliation generation error: {e}')
+
+
+def _generate_reconciliation(state):
+    """
+    After training, extract all wrong_product and no_odoo items for manual reconciliation.
+    Groups by unique (raw_text, suggested_product_id) — resolving one alias fixes all occurrences.
+    Persists to reconciliation.json alongside app.py.
+    """
+    items_map = {}   # key → item dict
+    item_order = []  # preserve insertion order
+
+    folder = state.get('folder_path', '')
+
+    for r in state.get('results', []):
+        if r.get('status') != 'scanned':
+            continue
+        fn = r.get('file', '')
+        file_path = os.path.join(folder, fn) if folder else fn
+
+        for rec in r.get('receipts', []):
+            for c in rec.get('comparison', []):
+                result = c.get('result')
+                raw    = (c.get('raw_text') or '').strip()
+                if not raw or result not in ('wrong_product', 'no_odoo'):
+                    continue
+
+                scanner = c.get('scanner') or {}
+                odoo    = c.get('odoo') or {}
+
+                # Suggested product: odoo match for wrong_product, scanner for no_odoo
+                if result == 'wrong_product':
+                    sugg_vid  = odoo.get('variant_id')
+                    sugg_name = odoo.get('name', '')
+                else:
+                    sugg_vid  = scanner.get('variant_id')
+                    sugg_name = scanner.get('name', '')
+
+                key = f"{raw.lower()}|{sugg_vid}"
+                if key not in items_map:
+                    item_id = f"{len(item_order):04d}_{raw[:20].replace(' ','_').replace('/','_')}"
+                    items_map[key] = {
+                        'id':                    item_id,
+                        'raw_text':              raw,
+                        'result':                result,
+                        'scanner_name':          scanner.get('name', ''),
+                        'scanner_confidence':    scanner.get('confidence', ''),
+                        'scanner_variant_id':    scanner.get('variant_id'),
+                        'odoo_variant_id':       odoo.get('variant_id'),
+                        'odoo_name':             odoo.get('name', ''),
+                        'suggested_product_id':  sugg_vid,
+                        'suggested_product_name': sugg_name,
+                        'count':                 0,
+                        'files':                 [],
+                        'status':                'pending',
+                        'resolved_product_id':   None,
+                        'resolved_alias':        None,
+                        'resolved_at':           None,
+                    }
+                    item_order.append(key)
+
+                entry = items_map[key]
+                entry['count'] += 1
+                if fn not in entry['files']:
+                    entry['files'].append(fn)
+
+    items = [items_map[k] for k in item_order]
+
+    # Sort: highest frequency first
+    items.sort(key=lambda x: -x['count'])
+
+    # Reload existing to preserve already-resolved items (id match)
+    try:
+        with open(_RECONCILIATION_PATH) as f:
+            existing = json.load(f)
+        existing_map = {it['id']: it for it in existing.get('items', [])}
+        for item in items:
+            if item['id'] in existing_map:
+                prev = existing_map[item['id']]
+                if prev.get('status') in ('resolved', 'skipped'):
+                    item['status']             = prev['status']
+                    item['resolved_product_id'] = prev.get('resolved_product_id')
+                    item['resolved_alias']      = prev.get('resolved_alias')
+                    item['resolved_at']         = prev.get('resolved_at')
+    except Exception:
+        pass
+
+    data = {
+        'session_id':  state.get('session_id', ''),
+        'folder_path': folder,
+        'generated_at': _dt.now().isoformat(),
+        'total':    len(items),
+        'pending':  sum(1 for i in items if i['status'] == 'pending'),
+        'resolved': sum(1 for i in items if i['status'] == 'resolved'),
+        'skipped':  sum(1 for i in items if i['status'] == 'skipped'),
+        'items':    items,
+    }
+
+    with open(_RECONCILIATION_PATH, 'w') as f:
+        json.dump(data, f, default=str, indent=2)
+
+    return data
+
 
 def _gemini_review_thread():
     """Wrapper for running _gemini_review_aliases in a background thread."""
@@ -4326,6 +4436,217 @@ def training_history_compare():
     except Exception:
         pass
     return jsonify(runs[::-1])  # chronological order
+
+
+# ── Manual Reconciliation ─────────────────────────────────────
+
+@app.route('/reconciliation')
+@login_required
+def reconciliation():
+    return render_template('reconciliation.html', **date_filter_context())
+
+
+@app.route('/api/reconciliation/data')
+@login_required
+def reconciliation_data():
+    """Return current reconciliation data. Auto-generates from last training run if missing."""
+    try:
+        with open(_RECONCILIATION_PATH) as f:
+            data = json.load(f)
+        return jsonify(data)
+    except FileNotFoundError:
+        # Try to generate from last saved training JSON
+        try:
+            files = sorted([f for f in os.listdir(os.path.dirname(__file__))
+                            if f.startswith('training_') and f.endswith('.json')], reverse=True)
+            if files:
+                with open(os.path.join(os.path.dirname(__file__), files[0])) as f:
+                    state = json.load(f)
+                data = _generate_reconciliation(state)
+                return jsonify(data)
+        except Exception:
+            pass
+        return jsonify({'total': 0, 'pending': 0, 'resolved': 0, 'skipped': 0,
+                        'items': [], 'folder_path': '', 'session_id': '',
+                        'generated_at': None})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/reconciliation/regenerate', methods=['POST'])
+@login_required
+def reconciliation_regenerate():
+    """Regenerate reconciliation from current training state or last saved training file."""
+    # Try live training state first
+    with _training_lock:
+        state = dict(_training_state)
+    if state.get('results'):
+        data = _generate_reconciliation(state)
+        return jsonify({'ok': True, 'total': data['total'], 'source': 'live'})
+    # Fall back to last saved training JSON
+    try:
+        files = sorted([f for f in os.listdir(os.path.dirname(__file__))
+                        if f.startswith('training_') and f.endswith('.json')], reverse=True)
+        if not files:
+            return jsonify({'error': 'No training data found. Run a training first.'}), 404
+        with open(os.path.join(os.path.dirname(__file__), files[0])) as f:
+            state = json.load(f)
+        data = _generate_reconciliation(state)
+        return jsonify({'ok': True, 'total': data['total'], 'source': files[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/reconciliation/resolve', methods=['POST'])
+@login_required
+def reconciliation_resolve():
+    """Resolve an item: add alias to products.md and mark resolved."""
+    data       = request.get_json() or {}
+    item_id    = data.get('id', '').strip()
+    variant_id = data.get('variant_id')
+    alias_text = (data.get('alias_text') or '').strip()
+
+    if not item_id or not variant_id or not alias_text:
+        return jsonify({'error': 'id, variant_id and alias_text required'}), 400
+
+    try:
+        variant_id = int(variant_id)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'variant_id must be integer'}), 400
+
+    # Add alias to products.md
+    try:
+        with open(_PRODUCTS_MD_PATH) as f:
+            lines = f.readlines()
+        new_lines = list(lines)
+        updated = False
+        for idx, line in enumerate(new_lines):
+            if line.startswith('|') and '---' not in line and 'variant_id' not in line:
+                cols = line.rstrip('\n').split('|')
+                if len(cols) >= 6:
+                    try:
+                        if int(cols[1].strip()) == variant_id:
+                            existing = cols[5].strip()
+                            if alias_text.lower() not in existing.lower():
+                                sep = ', ' if existing else ''
+                                cols[5] = f' {existing}{sep}{alias_text} '
+                                new_lines[idx] = '|'.join(cols) + '\n'
+                            updated = True
+                            break
+                    except Exception:
+                        pass
+        if not updated:
+            return jsonify({'error': f'Product variant_id {variant_id} not found in catalog'}), 404
+        with open(_PRODUCTS_MD_PATH, 'w') as f:
+            f.writelines(new_lines)
+        _load_catalog()
+    except Exception as e:
+        return jsonify({'error': f'Failed to update products.md: {e}'}), 500
+
+    # Mark item as resolved in reconciliation.json
+    try:
+        with open(_RECONCILIATION_PATH) as f:
+            rec_data = json.load(f)
+        for item in rec_data.get('items', []):
+            if item['id'] == item_id:
+                item['status']             = 'resolved'
+                item['resolved_product_id'] = variant_id
+                item['resolved_alias']      = alias_text
+                item['resolved_at']         = _dt.now().isoformat()
+                break
+        rec_data['pending']  = sum(1 for i in rec_data['items'] if i['status'] == 'pending')
+        rec_data['resolved'] = sum(1 for i in rec_data['items'] if i['status'] == 'resolved')
+        rec_data['skipped']  = sum(1 for i in rec_data['items'] if i['status'] == 'skipped')
+        with open(_RECONCILIATION_PATH, 'w') as f:
+            json.dump(rec_data, f, default=str, indent=2)
+    except Exception as e:
+        return jsonify({'error': f'Alias added but failed to update reconciliation: {e}'}), 500
+
+    return jsonify({'ok': True, 'alias_added': alias_text, 'variant_id': variant_id})
+
+
+@app.route('/api/reconciliation/skip', methods=['POST'])
+@login_required
+def reconciliation_skip():
+    """Skip an item (mark as skipped, no alias added)."""
+    data    = request.get_json() or {}
+    item_id = data.get('id', '').strip()
+    if not item_id:
+        return jsonify({'error': 'id required'}), 400
+    try:
+        with open(_RECONCILIATION_PATH) as f:
+            rec_data = json.load(f)
+        for item in rec_data.get('items', []):
+            if item['id'] == item_id:
+                item['status'] = 'skipped'
+                break
+        rec_data['pending']  = sum(1 for i in rec_data['items'] if i['status'] == 'pending')
+        rec_data['skipped']  = sum(1 for i in rec_data['items'] if i['status'] == 'skipped')
+        with open(_RECONCILIATION_PATH, 'w') as f:
+            json.dump(rec_data, f, default=str, indent=2)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/reconciliation/delete-file', methods=['POST'])
+@login_required
+def reconciliation_delete_file():
+    """Move an image file to a deleted/ subfolder and mark its items as file_deleted."""
+    data     = request.get_json() or {}
+    filename = data.get('file', '').strip()
+    if not filename:
+        return jsonify({'error': 'file required'}), 400
+
+    try:
+        with open(_RECONCILIATION_PATH) as f:
+            rec_data = json.load(f)
+        folder = rec_data.get('folder_path', '')
+        if not folder:
+            return jsonify({'error': 'No folder path in reconciliation data'}), 400
+
+        src = os.path.join(folder, filename)
+        if not os.path.isfile(src):
+            return jsonify({'error': f'File not found: {src}'}), 404
+
+        deleted_dir = os.path.join(folder, 'deleted')
+        os.makedirs(deleted_dir, exist_ok=True)
+        dst = os.path.join(deleted_dir, filename)
+        os.rename(src, dst)
+
+        # Mark all items for this file as file_deleted
+        for item in rec_data.get('items', []):
+            if filename in item.get('files', []):
+                if item['status'] == 'pending':
+                    item['status'] = 'file_deleted'
+
+        rec_data['pending'] = sum(1 for i in rec_data['items'] if i['status'] == 'pending')
+        with open(_RECONCILIATION_PATH, 'w') as f:
+            json.dump(rec_data, f, default=str, indent=2)
+
+        return jsonify({'ok': True, 'moved_to': dst})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/reconciliation/image/<path:filename>')
+@login_required
+def reconciliation_image(filename):
+    """Serve a training image for preview in the reconciliation UI."""
+    try:
+        with open(_RECONCILIATION_PATH) as f:
+            rec_data = json.load(f)
+        folder = rec_data.get('folder_path', '')
+    except Exception:
+        return 'Not found', 404
+    file_path = os.path.join(folder, filename)
+    if not os.path.isfile(file_path):
+        return 'Not found', 404
+    ext = os.path.splitext(filename)[1].lower()
+    mime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+            'webp': 'image/webp'}.get(ext.lstrip('.'), 'image/jpeg')
+    with open(file_path, 'rb') as f:
+        return Response(f.read(), mimetype=mime)
 
 
 @app.route('/api/receipts/add-alias', methods=['POST'])

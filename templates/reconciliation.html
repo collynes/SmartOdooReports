@@ -1,0 +1,459 @@
+{% extends "base.html" %}
+{% block title %}Manual Reconciliation — Party World{% endblock %}
+{% block content %}
+<style>
+/* ── Layout ── */
+.recon-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.recon-title  { font-size:20px; font-weight:700; color:#1e293b; }
+.recon-stats  { display:flex; gap:10px; flex-wrap:wrap; }
+.stat-pill    { padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; }
+.stat-pending  { background:#fef3c7; color:#92400e; }
+.stat-resolved { background:#d1fae5; color:#065f46; }
+.stat-skipped  { background:#f1f5f9; color:#475569; }
+.stat-total    { background:#ede9fe; color:#4c1d95; }
+
+/* ── Progress bar ── */
+.progress-wrap { background:#f1f5f9; border-radius:8px; height:8px; margin-bottom:20px; overflow:hidden; }
+.progress-bar  { height:100%; background:linear-gradient(90deg,#6d28d9,#8b5cf6); border-radius:8px; transition:width .4s; }
+
+/* ── Filter tabs ── */
+.filter-tabs  { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
+.filter-tab   { padding:6px 16px; border-radius:20px; border:1.5px solid #e2e8f0; background:#fff; color:#64748b; font-size:13px; font-weight:500; cursor:pointer; transition:all .15s; }
+.filter-tab:hover   { border-color:#8b5cf6; color:#6d28d9; }
+.filter-tab.active  { background:#6d28d9; border-color:#6d28d9; color:#fff; }
+
+/* ── Item cards ── */
+.recon-list   { display:flex; flex-direction:column; gap:10px; }
+.recon-card   { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:16px; transition:border-color .15s; }
+.recon-card:hover { border-color:#8b5cf6; }
+.recon-card.resolved { border-color:#a7f3d0; background:#f0fdf4; opacity:.75; }
+.recon-card.skipped  { border-color:#e2e8f0; background:#f8fafc; opacity:.6; }
+.recon-card.file_deleted { display:none; }
+
+.card-top    { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+.raw-badge   { background:#1e293b; color:#f1f5f9; padding:4px 10px; border-radius:6px; font-family:monospace; font-size:14px; font-weight:600; white-space:nowrap; }
+.count-badge { background:#ede9fe; color:#4c1d95; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; white-space:nowrap; }
+.result-badge{ padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; }
+.badge-wrong { background:#fef3c7; color:#92400e; }
+.badge-noodoo{ background:#fee2e2; color:#991b1b; }
+.badge-resolved-tag { background:#d1fae5; color:#065f46; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; }
+.badge-skipped-tag  { background:#f1f5f9; color:#475569; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; }
+
+.card-body   { margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media(max-width:600px){ .card-body { grid-template-columns:1fr; } }
+.info-box    { background:#f8fafc; border-radius:8px; padding:10px 12px; }
+.info-label  { font-size:10px; font-weight:700; text-transform:uppercase; color:#94a3b8; letter-spacing:.5px; margin-bottom:4px; }
+.info-val    { font-size:13px; color:#1e293b; font-weight:500; }
+.info-val.dim{ color:#94a3b8; font-style:italic; }
+
+.card-files  { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+.file-chip   { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:6px; padding:3px 8px; font-size:11px; color:#475569; display:flex; align-items:center; gap:5px; cursor:pointer; transition:background .15s; }
+.file-chip:hover { background:#fef3c7; }
+.file-chip .del-x{ color:#ef4444; font-weight:700; font-size:13px; padding-left:3px; }
+
+/* ── Resolve form ── */
+.resolve-form { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+.alias-input  { flex:1; min-width:160px; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; }
+.alias-input:focus { border-color:#8b5cf6; }
+.product-select { flex:2; min-width:200px; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; background:#fff; }
+.product-select:focus { border-color:#8b5cf6; }
+.btn-resolve { padding:8px 18px; background:#6d28d9; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background .15s; white-space:nowrap; }
+.btn-resolve:hover { background:#5b21b6; }
+.btn-resolve:disabled { background:#c4b5fd; cursor:not-allowed; }
+.btn-skip    { padding:8px 14px; background:#f1f5f9; color:#475569; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; }
+.btn-skip:hover { background:#e2e8f0; }
+
+/* ── Image preview modal ── */
+.img-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:9999; justify-content:center; align-items:center; }
+.img-modal-overlay.open { display:flex; }
+.img-modal-box { background:#fff; border-radius:12px; padding:12px; max-width:90vw; max-height:90vh; position:relative; }
+.img-modal-box img { max-width:80vw; max-height:80vh; border-radius:8px; display:block; }
+.img-modal-close { position:absolute; top:8px; right:10px; background:#1e293b; color:#fff; border:none; border-radius:50%; width:28px; height:28px; font-size:16px; cursor:pointer; line-height:28px; text-align:center; }
+.img-modal-del { margin-top:10px; text-align:center; }
+
+/* ── Bottom bar ── */
+.bottom-bar { position:sticky; bottom:0; background:#fff; border-top:1.5px solid #e2e8f0; padding:12px 20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:24px; border-radius:0 0 12px 12px; }
+.btn-train  { padding:10px 24px; background:#059669; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; transition:background .15s; }
+.btn-train:hover { background:#047857; }
+.btn-train:disabled { background:#6ee7b7; cursor:not-allowed; }
+
+.empty-state { text-align:center; padding:60px 20px; color:#94a3b8; }
+.empty-state svg { opacity:.3; margin-bottom:12px; }
+.empty-icon  { font-size:48px; margin-bottom:12px; }
+
+.toast { position:fixed; bottom:80px; right:20px; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; color:#fff; z-index:9998; opacity:0; transition:opacity .3s; pointer-events:none; }
+.toast.show  { opacity:1; }
+.toast.ok    { background:#059669; }
+.toast.err   { background:#dc2626; }
+</style>
+
+<div style="max-width:900px;margin:0 auto;padding:16px;">
+
+  <!-- Header -->
+  <div class="recon-header">
+    <div>
+      <div class="recon-title">Manual Reconciliation</div>
+      <div style="font-size:13px;color:#64748b;margin-top:2px;">Fix mismatches from the last training run — each resolved item adds an alias and improves accuracy</div>
+    </div>
+    <div class="recon-stats">
+      <span class="stat-pill stat-pending"  id="cnt-pending">— pending</span>
+      <span class="stat-pill stat-resolved" id="cnt-resolved">— resolved</span>
+      <span class="stat-pill stat-skipped"  id="cnt-skipped">— skipped</span>
+      <span class="stat-pill stat-total"    id="cnt-total">— total</span>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-wrap"><div class="progress-bar" id="prog-bar" style="width:0%"></div></div>
+
+  <!-- Session info -->
+  <div id="session-info" style="font-size:12px;color:#94a3b8;margin-bottom:14px;"></div>
+
+  <!-- Filter tabs -->
+  <div class="filter-tabs">
+    <button class="filter-tab active" onclick="setFilter('pending')">Pending</button>
+    <button class="filter-tab" onclick="setFilter('resolved')">Resolved</button>
+    <button class="filter-tab" onclick="setFilter('skipped')">Skipped</button>
+    <button class="filter-tab" onclick="setFilter('all')">All</button>
+  </div>
+
+  <!-- Item list -->
+  <div class="recon-list" id="recon-list">
+    <div class="empty-state"><div class="empty-icon">📋</div><div>Loading reconciliation data…</div></div>
+  </div>
+
+  <!-- Bottom action bar -->
+  <div class="bottom-bar">
+    <button class="btn-train" id="btn-train" onclick="startTraining()" disabled>
+      Re-run Training
+    </button>
+    <button onclick="regenerate()" style="padding:10px 18px;background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+      Refresh from Last Run
+    </button>
+    <span id="train-status" style="font-size:13px;color:#64748b;"></span>
+  </div>
+
+</div>
+
+<!-- Image preview modal -->
+<div class="img-modal-overlay" id="img-modal" onclick="closeModal(event)">
+  <div class="img-modal-box">
+    <button class="img-modal-close" onclick="document.getElementById('img-modal').classList.remove('open')">×</button>
+    <img id="modal-img" src="" alt="Receipt">
+    <div class="img-modal-del">
+      <button id="modal-del-btn" onclick="deleteFromModal()" style="background:#ef4444;color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+        Delete this image
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allItems   = [];
+let catalog    = [];
+let curFilter  = 'pending';
+let modalFile  = '';
+
+// ── Boot ─────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([loadCatalog(), loadData()]);
+}
+
+async function loadCatalog() {
+  try {
+    const r = await fetch('/api/receipts/products');
+    const d = await r.json();
+    // Parse pipe-delimited products.md
+    catalog = [];
+    for (const line of (d.content || '').split('\n')) {
+      if (!line.startsWith('|') || line.includes('---') || line.includes('variant_id')) continue;
+      const cols = line.split('|').map(c => c.trim()).filter(Boolean);
+      if (cols.length >= 4) {
+        const id = parseInt(cols[0]);
+        if (!isNaN(id)) catalog.push({ id, name: cols[1], code: cols[2] || '', price: cols[3] });
+      }
+    }
+    catalog.sort((a, b) => a.name.localeCompare(b.name));
+  } catch(e) { console.error('catalog load error', e); }
+}
+
+async function loadData() {
+  try {
+    const r = await fetch('/api/reconciliation/data');
+    const d = await r.json();
+    allItems = d.items || [];
+    updateStats(d);
+    renderList();
+    document.getElementById('session-info').textContent =
+      d.session_id ? `Session: ${d.session_id} · Generated: ${(d.generated_at||'').slice(0,16).replace('T',' ')} · Folder: ${d.folder_path}` : '';
+  } catch(e) {
+    document.getElementById('recon-list').innerHTML =
+      '<div class="empty-state"><div>Failed to load data. Run a training first.</div></div>';
+  }
+}
+
+// ── Stats ─────────────────────────────────────────────────────
+function updateStats(d) {
+  const pending  = (d.items||[]).filter(i => i.status === 'pending').length;
+  const resolved = (d.items||[]).filter(i => i.status === 'resolved').length;
+  const skipped  = (d.items||[]).filter(i => i.status === 'skipped').length;
+  const total    = (d.items||[]).filter(i => i.status !== 'file_deleted').length;
+  document.getElementById('cnt-pending').textContent  = `${pending} pending`;
+  document.getElementById('cnt-resolved').textContent = `${resolved} resolved`;
+  document.getElementById('cnt-skipped').textContent  = `${skipped} skipped`;
+  document.getElementById('cnt-total').textContent    = `${total} total`;
+  const done = resolved + skipped;
+  document.getElementById('prog-bar').style.width = total ? `${Math.round(done/total*100)}%` : '0%';
+  document.getElementById('btn-train').disabled = pending > 0;
+  document.getElementById('train-status').textContent =
+    pending > 0 ? `${pending} items still pending` : 'All items reviewed — ready to re-run training!';
+}
+
+// ── Render ─────────────────────────────────────────────────────
+function setFilter(f) {
+  curFilter = f;
+  document.querySelectorAll('.filter-tab').forEach((b,i) => {
+    b.classList.toggle('active', ['pending','resolved','skipped','all'][i] === f);
+  });
+  renderList();
+}
+
+function renderList() {
+  const visible = allItems.filter(i => {
+    if (i.status === 'file_deleted') return false;
+    if (curFilter === 'all') return true;
+    return i.status === curFilter;
+  });
+
+  if (!visible.length) {
+    document.getElementById('recon-list').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">${curFilter==='pending'?'✅':'📋'}</div>
+       <div>${curFilter==='pending' ? 'No pending items!' : 'Nothing here yet.'}</div></div>`;
+    return;
+  }
+
+  document.getElementById('recon-list').innerHTML = visible.map(item => cardHTML(item)).join('');
+}
+
+function cardHTML(item) {
+  const resultLabel = item.result === 'wrong_product' ? 'Wrong product' : 'Not in Odoo';
+  const resultClass = item.result === 'wrong_product' ? 'badge-wrong' : 'badge-noodoo';
+  const cardClass   = item.status !== 'pending' ? item.status : '';
+
+  const scannerInfo = item.scanner_name
+    ? `${item.scanner_name} <span style="opacity:.6;font-size:11px;">(${item.scanner_confidence})</span>` : '—';
+  const odooInfo = item.odoo_name || '<span class="dim">Not in Odoo</span>';
+
+  // File chips
+  const fileChips = (item.files || []).map(f =>
+    `<span class="file-chip" title="Click to preview" onclick="previewFile('${f}','${item.id}')">
+      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+      ${f.slice(-28)}
+     </span>`
+  ).join('');
+
+  // Resolved display
+  let actionArea = '';
+  if (item.status === 'resolved') {
+    actionArea = `<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span class="badge-resolved-tag">✓ Resolved</span>
+      <span style="font-size:12px;color:#065f46;">Alias "<b>${item.resolved_alias}</b>" → ${item.resolved_product_id}</span>
+      <button class="btn-skip" style="font-size:11px;padding:4px 10px;" onclick="undoResolve('${item.id}')">Undo</button>
+    </div>`;
+  } else if (item.status === 'skipped') {
+    actionArea = `<div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+      <span class="badge-skipped-tag">— Skipped</span>
+      <button class="btn-skip" style="font-size:11px;padding:4px 10px;" onclick="undoSkip('${item.id}')">Undo</button>
+    </div>`;
+  } else {
+    // Build product options — pre-select suggested
+    const opts = catalog.map(p =>
+      `<option value="${p.id}" ${p.id === item.suggested_product_id ? 'selected' : ''}>${p.name}${p.code ? ' ('+p.code+')' : ''}</option>`
+    ).join('');
+
+    actionArea = `<div class="resolve-form">
+      <input class="alias-input" id="alias-${item.id}" type="text" placeholder="Alias text (as written on receipt)"
+             value="${escHtml(item.raw_text)}" />
+      <select class="product-select" id="prod-${item.id}">
+        <option value="">— select correct product —</option>
+        ${opts}
+      </select>
+      <button class="btn-resolve" onclick="resolve('${item.id}')">Resolve</button>
+      <button class="btn-skip" onclick="skip('${item.id}')">Skip</button>
+    </div>`;
+  }
+
+  return `<div class="recon-card ${cardClass}" id="card-${item.id}">
+    <div class="card-top">
+      <span class="raw-badge">${escHtml(item.raw_text)}</span>
+      <span class="count-badge">${item.count}× seen</span>
+      <span class="result-badge ${resultClass}">${resultLabel}</span>
+    </div>
+    <div class="card-body">
+      <div class="info-box">
+        <div class="info-label">Scanner matched</div>
+        <div class="info-val">${scannerInfo}</div>
+      </div>
+      <div class="info-box">
+        <div class="info-label">Odoo says it should be</div>
+        <div class="info-val ${item.odoo_name ? '' : 'dim'}">${odooInfo}</div>
+      </div>
+    </div>
+    ${fileChips ? `<div class="card-files">${fileChips}</div>` : ''}
+    ${actionArea}
+  </div>`;
+}
+
+// ── Actions ────────────────────────────────────────────────────
+async function resolve(id) {
+  const aliasText  = document.getElementById(`alias-${id}`)?.value?.trim();
+  const variantId  = document.getElementById(`prod-${id}`)?.value;
+  if (!aliasText)  { showToast('Enter an alias text', 'err'); return; }
+  if (!variantId)  { showToast('Select a product', 'err'); return; }
+
+  const btn = document.querySelector(`#card-${id} .btn-resolve`);
+  if (btn) btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/reconciliation/resolve', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({id, variant_id: parseInt(variantId), alias_text: aliasText})
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'err'); if (btn) btn.disabled = false; return; }
+
+    // Update local state
+    const item = allItems.find(i => i.id === id);
+    if (item) {
+      item.status             = 'resolved';
+      item.resolved_alias     = aliasText;
+      item.resolved_product_id = parseInt(variantId);
+    }
+    showToast(`Alias "${aliasText}" added!`, 'ok');
+    updateStats({items: allItems});
+    renderList();
+  } catch(e) { showToast('Network error', 'err'); if (btn) btn.disabled = false; }
+}
+
+async function skip(id) {
+  try {
+    await fetch('/api/reconciliation/skip', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({id})
+    });
+    const item = allItems.find(i => i.id === id);
+    if (item) item.status = 'skipped';
+    updateStats({items: allItems});
+    renderList();
+  } catch(e) { showToast('Error', 'err'); }
+}
+
+async function undoResolve(id) {
+  try {
+    await fetch('/api/reconciliation/skip', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id})
+    });
+    const item = allItems.find(i => i.id === id);
+    if (item) { item.status = 'pending'; item.resolved_alias = null; item.resolved_product_id = null; }
+    updateStats({items: allItems});
+    renderList();
+  } catch(e) { showToast('Error', 'err'); }
+}
+
+async function undoSkip(id) {
+  const item = allItems.find(i => i.id === id);
+  if (item) item.status = 'pending';
+  updateStats({items: allItems});
+  renderList();
+}
+
+// ── Image preview & delete ──────────────────────────────────────
+function previewFile(filename, itemId) {
+  modalFile = filename;
+  document.getElementById('modal-img').src = `/api/reconciliation/image/${encodeURIComponent(filename)}`;
+  document.getElementById('img-modal').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e.target.id === 'img-modal') document.getElementById('img-modal').classList.remove('open');
+}
+
+async function deleteFromModal() {
+  if (!modalFile) return;
+  if (!confirm(`Move "${modalFile}" to deleted folder? This cannot be undone easily.`)) return;
+  try {
+    const r = await fetch('/api/reconciliation/delete-file', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({file: modalFile})
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'err'); return; }
+    // Mark items for this file as deleted
+    allItems.forEach(item => {
+      if ((item.files||[]).includes(modalFile) && item.status === 'pending') {
+        item.status = 'file_deleted';
+      }
+    });
+    document.getElementById('img-modal').classList.remove('open');
+    showToast(`Moved to deleted/`, 'ok');
+    updateStats({items: allItems});
+    renderList();
+  } catch(e) { showToast('Error deleting file', 'err'); }
+}
+
+// ── Training ───────────────────────────────────────────────────
+async function startTraining() {
+  const btn = document.getElementById('btn-train');
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+
+  // Read folder from reconciliation data
+  try {
+    const r = await fetch('/api/reconciliation/data');
+    const d = await r.json();
+    const folder = d.folder_path || '';
+    if (!folder) { showToast('No folder path found', 'err'); btn.disabled = false; btn.textContent = 'Re-run Training'; return; }
+
+    const tr = await fetch('/api/receipts/training/start', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({folder, resume: false, mode: 'gemini_match'})
+    });
+    const td = await tr.json();
+    if (td.error) { showToast(td.error, 'err'); btn.disabled = false; btn.textContent = 'Re-run Training'; return; }
+
+    showToast('Training started! Go to Scanner Training to monitor.', 'ok');
+    btn.textContent = 'Training running…';
+    document.getElementById('train-status').textContent = `Session ${td.session_id} started — check Scanner Training page`;
+  } catch(e) { showToast('Error starting training', 'err'); btn.disabled = false; btn.textContent = 'Re-run Training'; }
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function regenerate() {
+  showToast('Regenerating from last training run…', 'ok');
+  try {
+    const r = await fetch('/api/reconciliation/regenerate', {method:'POST'});
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'err'); return; }
+    showToast(`Loaded ${d.total} items from ${d.source}`, 'ok');
+    await loadData();
+  } catch(e) { showToast('Error regenerating', 'err'); }
+}
+
+// ── Init ───────────────────────────────────────────────────────
+init();
+</script>
+{% endblock %}
