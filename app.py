@@ -3756,6 +3756,20 @@ def _generate_reconciliation(state):
                 scanner = c.get('scanner') or {}
                 odoo    = c.get('odoo') or {}
 
+                # Compute scanned unit price from line_total / qty
+                try:
+                    qty        = float(c.get('qty') or 1) or 1
+                    line_total = float(c.get('line_total') or 0)
+                    scanned_unit_price = round(line_total / qty, 2) if line_total else None
+                except Exception:
+                    scanned_unit_price = None
+
+                odoo_unit_price = None
+                try:
+                    odoo_unit_price = round(float(odoo.get('price') or 0), 2) or None
+                except Exception:
+                    pass
+
                 # Suggested product: odoo match for wrong_product, scanner for no_odoo
                 if result == 'wrong_product':
                     sugg_vid  = odoo.get('variant_id')
@@ -3776,6 +3790,8 @@ def _generate_reconciliation(state):
                         'scanner_variant_id':    scanner.get('variant_id'),
                         'odoo_variant_id':       odoo.get('variant_id'),
                         'odoo_name':             odoo.get('name', ''),
+                        'scanned_unit_price':    scanned_unit_price,
+                        'odoo_unit_price':       odoo_unit_price,
                         'suggested_product_id':  sugg_vid,
                         'suggested_product_name': sugg_name,
                         'count':                 0,

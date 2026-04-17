@@ -39,8 +39,9 @@
 .badge-resolved-tag { background:#d1fae5; color:#065f46; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; }
 .badge-skipped-tag  { background:#f1f5f9; color:#475569; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; }
 
-.card-body   { margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-@media(max-width:600px){ .card-body { grid-template-columns:1fr; } }
+.card-body   { margin-top:12px; display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px; }
+@media(max-width:700px){ .card-body { grid-template-columns:1fr 1fr; } }
+@media(max-width:420px){ .card-body { grid-template-columns:1fr; } }
 .info-box    { background:#f8fafc; border-radius:8px; padding:10px 12px; }
 .info-label  { font-size:10px; font-weight:700; text-transform:uppercase; color:#94a3b8; letter-spacing:.5px; margin-bottom:4px; }
 .info-val    { font-size:13px; color:#1e293b; font-weight:500; }
@@ -255,6 +256,17 @@ function cardHTML(item) {
     ? `${item.scanner_name} <span style="opacity:.6;font-size:11px;">(${item.scanner_confidence})</span>` : '—';
   const odooInfo = item.odoo_name || '<span class="dim">Not in Odoo</span>';
 
+  // Price comparison
+  const scannedPrice = item.scanned_unit_price != null ? `KES ${item.scanned_unit_price.toLocaleString()}` : '—';
+  const odooPrice    = item.odoo_unit_price    != null ? `KES ${item.odoo_unit_price.toLocaleString()}`    : '—';
+  let priceMatch = '';
+  if (item.scanned_unit_price && item.odoo_unit_price) {
+    const diff = Math.abs(item.scanned_unit_price - item.odoo_unit_price) / item.odoo_unit_price;
+    priceMatch = diff < 0.05
+      ? '<span style="color:#059669;font-size:11px;font-weight:700;">✓ match</span>'
+      : `<span style="color:#dc2626;font-size:11px;font-weight:700;">✗ ${Math.round(diff*100)}% diff</span>`;
+  }
+
   // File chips
   const fileChips = (item.files || []).map(f =>
     `<span class="file-chip" title="Click to preview" onclick="previewFile('${f}','${item.id}')">
@@ -314,6 +326,14 @@ function cardHTML(item) {
       <div class="info-box">
         <div class="info-label">Odoo says it should be</div>
         <div class="info-val ${item.odoo_name ? '' : 'dim'}">${odooInfo}</div>
+      </div>
+      <div class="info-box">
+        <div class="info-label">Scanned unit price</div>
+        <div class="info-val">${scannedPrice}</div>
+      </div>
+      <div class="info-box">
+        <div class="info-label">Odoo unit price ${priceMatch}</div>
+        <div class="info-val">${odooPrice}</div>
       </div>
     </div>
     ${fileChips ? `<div class="card-files">${fileChips}</div>` : ''}
