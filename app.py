@@ -2776,7 +2776,9 @@ _RECEIPT_RULES = """Rules:
 - null matched_product only when truly zero resemblance
 - Use receipt price for line_total if different from catalog
 - Dates written as D/M/YY
-- DATE RANGE: Party World opened April 2025. Any date before 2025-04-01 is a misread — output null for date. Dates more than 2 months in the future are also misreads — output null."""
+- DATE RANGE: Party World opened April 2025. Any date before 2025-04-01 is a misread — output null for date. Dates more than 2 months in the future are also misreads — output null.
+- LINE COUNT: Count every row in the Particulars/Description column. Your items array MUST have that exact count. Never skip a line — if handwriting is unclear output LOW confidence with your best guess for raw_text.
+- IGNORE footer lines: phone numbers, "Sales-XXXX", "Phone-XXXX", "Id:", totals rows, signature lines — these are NOT product items."""
 
 def _prompt_gemini_only(catalog_compact: str) -> str:
     return f"""You are an OCR and product matching assistant for Party World Shop, Nairobi.
@@ -2810,7 +2812,9 @@ Rules:
 - RECEIPT NUMBER: 4-digit serial near BOTTOM. NOT the date.
 - raw_text: copy exactly what is handwritten, do not interpret or clean up
 - Dates written as D/M/YY
-- DATE RANGE: Party World opened April 2025. Any date before 2025-04-01 is a misread — output null. Dates more than 2 months in the future are also misreads — output null."""
+- DATE RANGE: Party World opened April 2025. Any date before 2025-04-01 is a misread — output null. Dates more than 2 months in the future are also misreads — output null.
+- LINE COUNT: Count every row in the Particulars/Description column. Your items array MUST have that exact count. Never skip a line — output raw_text even if blurry.
+- IGNORE footer lines: phone numbers, "Sales-XXXX", "Phone-XXXX", "Id:", totals rows — these are NOT product items."""
 
 
 def _prompt_resolve_ambiguous(ambiguous_items: list) -> str:
@@ -3441,6 +3445,22 @@ def _run_training(folder_path, session_id, db_cfg, resume=False, training_mode='
             'db_error': None,
         })
 
+    # Regex to detect receipt footer/watermark noise — not product lines
+    import re as _re
+    _FOOTER_RE = _re.compile(
+        r'^(sales[-\s]*[\d]+|phone[-\s]*[\d]+|id\s*:|tel[:,]|0[67]\d{8,}|\d{10,})',
+        _re.IGNORECASE
+    )
+
+    def _is_footer_noise(raw_text):
+        """Return True if this looks like a receipt footer line, not a product."""
+        if not raw_text: return False
+        t = raw_text.strip()
+        if _FOOTER_RE.match(t): return True
+        # Pure numbers with no letters — likely a price/total row
+        if _re.match(r'^[\d\s,./]+$', t) and len(t) < 8: return True
+        return False
+
     def _process_receipts_raw(fn, receipts_raw, db_cfg):
         """Run comparison on raw OCR output, collect alias suggestions. Returns receipt_results list."""
         receipt_results = []
@@ -3448,10 +3468,18 @@ def _run_training(folder_path, session_id, db_cfg, resume=False, training_mode='
             receipt_no    = receipt.get('receipt_no')
             receipt_date  = _validate_receipt_date(receipt.get('date'))  # reject pre-2025 / far-future misreads
             receipt_total = receipt.get('total_written')
-            items         = receipt.get('items', [])
+            # Filter out footer/noise lines before comparison
+            items = [it for it in receipt.get('items', [])
+                     if not _is_footer_noise(it.get('raw_text', ''))]
             odoo_lines, match_quality = _lookup_odoo_receipt(
                 db_cfg, receipt_no, receipt_date, receipt_total)
-            comparison = _compare_receipt(items, odoo_lines)
+            # Skip comparison for date_only matches — too uncertain (multiple orders same day)
+            # Comparing against the wrong order produces misleading wrong_product / missed results
+            # Also skip when no Odoo match at all — no_odoo items would unfairly drag accuracy down
+            if match_quality in ('date_only', 'none') or not odoo_lines:
+                comparison = []
+            else:
+                comparison = _compare_receipt(items, odoo_lines)
 
             correct = sum(1 for c in comparison if c['result'] == 'correct')
             total_c = len([c for c in comparison if c['result'] != 'missed'])
