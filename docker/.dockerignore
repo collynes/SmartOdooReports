@@ -1,0 +1,19 @@
+# Build context lives at repo root (`context: ..` in compose), so this
+# .dockerignore is intentionally placed in /docker/ but compose resolves
+# the project-level .dockerignore. We provide one at root too — see ../.dockerignore.
+.git
+__pycache__
+*.pyc
+*.pyo
+venv
+.env
+.env.*
+logs
+*.log
+training_runs
+training_*.json
+*.bak
+*.bak.*
+.DS_Store
+*.pem
+LightsailDefaultKey-*.pem

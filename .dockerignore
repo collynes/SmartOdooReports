@@ -1,0 +1,19 @@
+# Same content as docker/.dockerignore — Docker reads from the build
+# context root (which is the repo root since docker-compose uses
+# `context: ..`).
+.git
+__pycache__
+*.pyc
+*.pyo
+venv
+.env
+.env.*
+logs
+*.log
+training_runs
+training_*.json
+*.bak
+*.bak.*
+.DS_Store
+*.pem
+LightsailDefaultKey-*.pem

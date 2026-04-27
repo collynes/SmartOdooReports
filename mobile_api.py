@@ -25,7 +25,7 @@ SECRET_KEY   = os.getenv('SECRET_KEY', 'changeme')
 ALGORITHM    = 'HS256'
 TOKEN_EXPIRE = 30  # days
 
-ODOO_URL = 'http://localhost:8069'
+ODOO_URL = os.getenv('ODOO_URL', 'http://localhost:8069')
 ODOO_DB  = os.getenv('DB_NAME', 'odoo18')
 
 # Webapp users from .env — these also work as mobile login (mapped to Odoo admin)

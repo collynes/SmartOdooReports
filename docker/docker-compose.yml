@@ -1,0 +1,107 @@
+# Dockerized PartyWord stack.
+# All ports are offset from the live native stack to avoid collisions
+# on 3.78.133.72 (which is already running native Odoo 18 on 8069,
+# Flask on 1989, mobile API on 8800, Postgres on 5432).
+#
+#   live native        Docker (this stack)
+#   ------------       --------------------
+#   Postgres 5432      Postgres   5532
+#   Odoo     8069      Odoo       8169  (longpolling 8172)
+#   Flask    1989      Flask      2989
+#   MobileAPI 8800     MobileAPI  8900
+
+name: partyworld
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pw_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: odoo18
+      POSTGRES_PASSWORD: odoo18
+      POSTGRES_DB: postgres
+    ports:
+      - "5532:5432"
+    volumes:
+      - pw_pgdata:/var/lib/postgresql/data
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo18 -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  odoo:
+    image: odoo:18
+    container_name: pw_odoo
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: postgres
+      USER: odoo18
+      PASSWORD: odoo18
+    ports:
+      - "8169:8069"
+      - "8172:8072"
+    volumes:
+      - pw_odoo_data:/var/lib/odoo
+      - ./odoo.conf:/etc/odoo/odoo.conf:ro
+
+  webapp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app
+    image: partyworld/app:latest
+    container_name: pw_webapp
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: odoo18
+      DB_USER: odoo18
+      DB_PASSWORD: odoo18
+      APP_USERNAME: ${APP_USERNAME:-admin}
+      APP_PASSWORD: ${APP_PASSWORD:-Party@2026!Admin}
+      SECRET_KEY: ${SECRET_KEY:-changeme-replace-with-openssl-rand-hex-32}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      FLASK_ENV: production
+      PORT: "1989"
+    ports:
+      - "2989:1989"
+    command: ["python", "app.py"]
+
+  mobile-api:
+    image: partyworld/app:latest
+    container_name: pw_mobile_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      odoo:
+        condition: service_started
+      webapp:
+        condition: service_started
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: odoo18
+      DB_USER: odoo18
+      DB_PASSWORD: odoo18
+      ODOO_URL: http://odoo:8069
+      SECRET_KEY: ${SECRET_KEY:-changeme-replace-with-openssl-rand-hex-32}
+      MOBILE_API_PORT: "8800"
+      MOBILE_API_ROOT_PATH: "/mobileapi"
+    ports:
+      - "8900:8800"
+    command: ["python", "mobile_api.py"]
+
+volumes:
+  pw_pgdata:
+  pw_odoo_data:

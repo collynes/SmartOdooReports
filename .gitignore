@@ -29,3 +29,8 @@ training_runs/
 
 # OS
 .DS_Store
+
+# SSH keys / secrets — never commit
+*.pem
+*.key
+LightsailDefaultKey-*
