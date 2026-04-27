@@ -1,8 +1,11 @@
 # Dockerized PartyWord Stack — Runbook
 
 This stack runs Odoo 18 + Postgres 16 + the Reports webapp + the Mobile API
-in containers, on alternative ports so it can co-exist with the **live native
-stack** already running on `3.78.133.72`.
+in containers, with two supported targets:
+
+- **Local on macOS** (your Mac with Docker Desktop) — see [Local](#local-on-macos) below.
+- **The Lightsail server** (`3.78.133.72`) — see [Server](#on-the-server) below. Uses
+  alt ports so it can co-exist with the live native stack already running there.
 
 | Service        | Live (native) | Docker (this stack) |
 | -------------- | ------------- | ------------------- |
@@ -16,7 +19,38 @@ into it does **not** touch the live `odoo18` DB.
 
 ---
 
-## One-time setup on the server
+## Local on macOS
+
+Prerequisites: Docker Desktop installed and running.
+
+```bash
+# 1. Clone (or pull) the repo on your Mac
+cd ~/Documents/PartyWord
+git clone https://github.com/collynes/SmartOdooReports.git    # or `git pull` if already cloned
+cd SmartOdooReports
+
+# 2. Make sure the Lightsail key is at the default path the script expects:
+#    ~/Documents/PartyWord/LightsailDefaultKey-eu-central-1.pem
+# (override with KEY=/path/to/key.pem if it lives elsewhere)
+
+# 3. Pull the latest dump from the live server into ./dumps/
+bash scripts/pull_latest_dump.sh
+
+# 4. Bring the stack up locally
+bash scripts/bootstrap_local.sh
+```
+
+That's it. Open:
+
+- **Odoo**: http://localhost:8169 (login with the same Odoo creds as live — this is a copy of that DB)
+- **Reports webapp**: http://localhost:2989
+- **Mobile API docs**: http://localhost:8900/mobileapi/docs
+
+Re-running `bootstrap_local.sh` is safe — it drops + recreates the Docker DB from the dump on every run. Re-pull the dump (`pull_latest_dump.sh`) any time you want fresher data; then re-run bootstrap.
+
+---
+
+## On the server
 
 ```bash
 # 1. Get the repo (or `git pull` if it's already there)
