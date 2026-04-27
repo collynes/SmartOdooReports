@@ -57,17 +57,22 @@ case "$DUMP_PATH" in
         ;;
     *.dump|*.pgdump|*.backup|*.tar)
         echo "==> Restoring custom/tar pg_dump archive..."
-        docker exec -i "$CONTAINER" pg_restore -U "$DBUSER" -d "$DBNAME" \
-            --no-owner --no-privileges --jobs=2 --verbose < "$DUMP_PATH" \
+        # --jobs requires a file path, not stdin — copy into container first
+        docker cp "$DUMP_PATH" "$CONTAINER:/tmp/restore.dump"
+        docker exec "$CONTAINER" pg_restore -U "$DBUSER" -d "$DBNAME" \
+            --no-owner --no-privileges --jobs=2 --verbose /tmp/restore.dump \
             || echo "(pg_restore reported some warnings — usually harmless ownership/privilege noise)"
+        docker exec "$CONTAINER" rm -f /tmp/restore.dump
         ;;
     *)
         # Sniff the first bytes; pg_dump custom format starts with "PGDMP"
         head -c 5 "$DUMP_PATH" | grep -q "PGDMP" && {
             echo "==> Detected custom-format dump (no recognized extension)..."
-            docker exec -i "$CONTAINER" pg_restore -U "$DBUSER" -d "$DBNAME" \
-                --no-owner --no-privileges --jobs=2 --verbose < "$DUMP_PATH" \
+            docker cp "$DUMP_PATH" "$CONTAINER:/tmp/restore.dump"
+            docker exec "$CONTAINER" pg_restore -U "$DBUSER" -d "$DBNAME" \
+                --no-owner --no-privileges --jobs=2 --verbose /tmp/restore.dump \
                 || echo "(pg_restore reported some warnings — usually harmless)"
+            docker exec "$CONTAINER" rm -f /tmp/restore.dump
         } || {
             echo "==> Falling back to plain SQL restore..."
             docker exec -i "$CONTAINER" psql -U "$DBUSER" -d "$DBNAME" -v ON_ERROR_STOP=0 < "$DUMP_PATH"
