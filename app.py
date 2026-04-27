@@ -3747,7 +3747,8 @@ def _generate_reconciliation(state):
         file_path = os.path.join(folder, fn) if folder else fn
 
         for rec in r.get('receipts', []):
-            for c in rec.get('comparison', []):
+            rec_no = rec.get('receipt_no') or ''
+            for item_pos, c in enumerate(rec.get('comparison', [])):
                 result = c.get('result')
                 raw    = (c.get('raw_text') or '').strip()
                 if not raw or result not in ('wrong_product', 'no_odoo'):
@@ -3796,6 +3797,7 @@ def _generate_reconciliation(state):
                         'suggested_product_name': sugg_name,
                         'count':                 0,
                         'files':                 [],
+                        'occurrences':           [],
                         'status':                'pending',
                         'resolved_product_id':   None,
                         'resolved_alias':        None,
@@ -3807,6 +3809,11 @@ def _generate_reconciliation(state):
                 entry['count'] += 1
                 if fn not in entry['files']:
                     entry['files'].append(fn)
+                entry['occurrences'].append({
+                    'file':       fn,
+                    'receipt_no': rec_no,
+                    'item_pos':   item_pos + 1,   # 1-based position in receipt
+                })
 
     items = [items_map[k] for k in item_order]
 

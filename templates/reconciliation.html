@@ -63,7 +63,7 @@
 .ac-input    { width:100%; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box; }
 .ac-input:focus { border-color:#8b5cf6; }
 .ac-dropdown { position:absolute; top:calc(100% + 2px); left:0; right:0; background:#fff; border:1.5px solid #8b5cf6; border-radius:8px; max-height:220px; overflow-y:auto; z-index:999; box-shadow:0 4px 16px rgba(0,0,0,.12); }
-.ac-option   { padding:8px 12px; font-size:13px; cursor:pointer; color:#1e293b; }
+.ac-option   { padding:8px 12px; font-size:13px; cursor:pointer; color:#1e293b; display:flex; align-items:center; gap:6px; }
 .ac-option:hover, .ac-option.highlighted { background:#ede9fe; }
 .ac-option small { color:#94a3b8; }
 .btn-resolve { padding:8px 18px; background:#6d28d9; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background .15s; white-space:nowrap; }
@@ -267,13 +267,17 @@ function cardHTML(item) {
       : `<span style="color:#dc2626;font-size:11px;font-weight:700;">✗ ${Math.round(diff*100)}% diff</span>`;
   }
 
-  // File chips
-  const fileChips = (item.files || []).map(f =>
-    `<span class="file-chip" title="Click to preview" onclick="previewFile('${f}','${item.id}')">
+  // File chips — use occurrences (receipt# + position) if available, fallback to bare files
+  const occurrences = item.occurrences && item.occurrences.length ? item.occurrences : (item.files||[]).map(f => ({file:f, receipt_no:'', item_pos:''}));
+  const fileChips = occurrences.map(occ => {
+    const f = occ.file || occ;
+    const recLabel = occ.receipt_no ? `#${occ.receipt_no}` : f.slice(-18);
+    const posLabel = occ.item_pos   ? ` · item ${occ.item_pos}` : '';
+    return `<span class="file-chip" title="Click to preview ${f}" onclick="previewFile('${f}','${item.id}')">
       <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
-      ${f.slice(-28)}
-     </span>`
-  ).join('');
+      <span style="font-weight:600;">${escHtml(recLabel)}</span><span style="opacity:.7;">${escHtml(posLabel)}</span>
+     </span>`;
+  }).join('');
 
   // Resolved display
   let actionArea = '';
@@ -289,9 +293,9 @@ function cardHTML(item) {
       <button class="btn-skip" style="font-size:11px;padding:4px 10px;" onclick="undoSkip('${item.id}')">Undo</button>
     </div>`;
   } else {
-    // Pre-fill suggested product name
+    // Pre-fill suggested product name (name only, no code suffix so search still finds it)
     const suggested = catalog.find(p => p.id === item.suggested_product_id);
-    const suggestedName = suggested ? `${suggested.name}${suggested.code ? ' ('+suggested.code+')' : ''}` : '';
+    const suggestedName = suggested ? suggested.name : '';
 
     actionArea = `<div class="resolve-form">
       <input class="alias-input" id="alias-${item.id}" type="text" placeholder="Alias text (as written on receipt)"
@@ -302,7 +306,7 @@ function cardHTML(item) {
                value="${escHtml(suggestedName)}"
                autocomplete="off"
                oninput="acFilter('${item.id}', this.value)"
-               onfocus="acFilter('${item.id}', this.value)"
+               onfocus="acFilter('${item.id}', '')"
                onblur="setTimeout(()=>acClose('${item.id}'),200)" />
         <input type="hidden" id="prod-${item.id}" value="${item.suggested_product_id || ''}" />
         <div class="ac-dropdown" id="ac-drop-${item.id}" style="display:none;"></div>
@@ -479,29 +483,61 @@ function escHtml(s) {
 
 // ── Autocomplete ───────────────────────────────────────────────
 function acFilter(id, query) {
-  const drop = document.getElementById(`ac-drop-${id}`);
+  const drop = document.getElementById('ac-drop-' + id);
   if (!drop) return;
-  const q = query.toLowerCase().trim();
+  const q = (query || '').toLowerCase().trim();
   const matches = q
-    ? catalog.filter(p => p.name.toLowerCase().includes(q) || (p.code||'').toLowerCase().includes(q)).slice(0, 20)
+    ? catalog.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.code || '').toLowerCase().includes(q)
+      ).slice(0, 20)
     : catalog.slice(0, 20);
   if (!matches.length) { drop.style.display = 'none'; return; }
-  drop.innerHTML = matches.map(p =>
-    `<div class="ac-option" onmousedown="acSelect('${id}',${p.id},'${escHtml(p.name+(p.code?' ('+p.code+')':''))}')">
-      ${escHtml(p.name)} ${p.code ? `<small>(${escHtml(p.code)})</small>` : ''}
-     </div>`
-  ).join('');
+
+  drop.innerHTML = '';
+  matches.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'ac-option';
+
+    const left = document.createElement('span');
+    left.style.flex = '1';
+    left.textContent = p.name;
+    if (p.code && p.code !== '—') {
+      const sm = document.createElement('small');
+      sm.textContent = ' (' + p.code + ')';
+      left.appendChild(sm);
+    }
+    div.appendChild(left);
+
+    if (p.price && p.price !== '—' && p.price !== '0') {
+      const pr = document.createElement('small');
+      pr.style.cssText = 'color:#6d28d9;font-weight:600;white-space:nowrap;margin-left:8px;';
+      pr.textContent = 'KES ' + p.price;
+      div.appendChild(pr);
+    }
+
+    div.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      const label = p.name + (p.code && p.code !== '—' ? ' (' + p.code + ')' : '');
+      acSelect(id, p.id, label);
+    });
+    drop.appendChild(div);
+  });
+
   drop.style.display = 'block';
 }
 
 function acSelect(id, productId, productName) {
-  document.getElementById(`prod-${id}`).value         = productId;
-  document.getElementById(`prod-search-${id}`).value  = productName;
-  document.getElementById(`ac-drop-${id}`).style.display = 'none';
+  const hiddenInput = document.getElementById('prod-' + id);
+  const searchInput = document.getElementById('prod-search-' + id);
+  const drop        = document.getElementById('ac-drop-' + id);
+  if (hiddenInput) hiddenInput.value = productId;
+  if (searchInput) searchInput.value = productName;
+  if (drop)        drop.style.display = 'none';
 }
 
 function acClose(id) {
-  const drop = document.getElementById(`ac-drop-${id}`);
+  const drop = document.getElementById('ac-drop-' + id);
   if (drop) drop.style.display = 'none';
 }
 

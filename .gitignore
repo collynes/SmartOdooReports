@@ -12,6 +12,12 @@ logs/
 
 # Runtime data
 dismissed_anomalies.json
+reconciliation.json
+price_history.json
+
+# Training data (large JSON files, not source code)
+training_*.json
+training_runs/
 
 # Backups
 *.bak
