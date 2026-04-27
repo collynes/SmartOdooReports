@@ -33,8 +33,10 @@ cd SmartOdooReports
 #    ~/Documents/PartyWord/LightsailDefaultKey-eu-central-1.pem
 # (override with KEY=/path/to/key.pem if it lives elsewhere)
 
-# 3. Pull the latest dump from the live server into ./dumps/
-bash scripts/pull_latest_dump.sh
+# 3. Pull a fresh DB dump into ./dumps/  — pick ONE of:
+bash scripts/pull_db_via_pg.sh        # direct Postgres dump (requires :5432 reachable)
+# OR
+bash scripts/pull_latest_dump.sh      # scp newest backup file via SSH
 
 # 4. Bring the stack up locally
 bash scripts/bootstrap_local.sh
