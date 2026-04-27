@@ -9,16 +9,36 @@
 
 set -euo pipefail
 
-KEY="${KEY:-$HOME/Documents/PartyWord/LightsailDefaultKey-eu-central-1.pem}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST="${HOST:-ubuntu@3.78.133.72}"
 REMOTE_DIR="${REMOTE_DIR:-/home/ubuntu/backups}"
-LOCAL_DIR="$(cd "$(dirname "$0")/.." && pwd)/dumps"
+LOCAL_DIR="$REPO_ROOT/dumps"
 
-if [[ ! -f "$KEY" ]]; then
-    echo "ERROR: SSH key not found at $KEY" >&2
-    echo "Set KEY=/path/to/key.pem and re-run, or place the .pem at the default path." >&2
+# Resolve the SSH key. Honor $KEY if set; otherwise probe a few common spots.
+if [[ -z "${KEY:-}" ]]; then
+    for cand in \
+        "$REPO_ROOT/LightsailDefaultKey-eu-central-1.pem" \
+        "$HOME/Documents/PartyWord/LightsailDefaultKey-eu-central-1.pem" \
+        "$HOME/.ssh/LightsailDefaultKey-eu-central-1.pem" \
+        "$HOME/.ssh/lightsail.pem"; do
+        if [[ -f "$cand" ]]; then
+            KEY="$cand"
+            break
+        fi
+    done
+fi
+
+if [[ -z "${KEY:-}" ]] || [[ ! -f "$KEY" ]]; then
+    echo "ERROR: SSH key not found." >&2
+    echo "Looked in:" >&2
+    echo "  $REPO_ROOT/LightsailDefaultKey-eu-central-1.pem" >&2
+    echo "  $HOME/Documents/PartyWord/LightsailDefaultKey-eu-central-1.pem" >&2
+    echo "  $HOME/.ssh/LightsailDefaultKey-eu-central-1.pem" >&2
+    echo "  $HOME/.ssh/lightsail.pem" >&2
+    echo "Set KEY=/path/to/key.pem and re-run." >&2
     exit 1
 fi
+echo "==> Using SSH key: $KEY"
 
 # AWS / SSH refuses world-readable keys
 chmod 600 "$KEY" 2>/dev/null || true
