@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}DevOps{% endblock %}
+{% block content %}
+
+<style>
+  .jenkins-shell { background:#f5f7fa; border:1px solid #d8dee9; border-radius:8px; overflow:hidden; }
+  .jenkins-top { display:flex; align-items:center; gap:14px; padding:16px 18px; background:linear-gradient(#fff,#eef2f7); border-bottom:1px solid #d8dee9; }
+  .jenkins-logo { width:46px; height:46px; border-radius:50%; background:#111827; color:#fff; display:grid; place-items:center; font-weight:900; font-size:20px; box-shadow:inset 0 -4px 0 rgba(255,255,255,.12); }
+  .jenkins-title { font-size:23px; font-weight:850; color:#1f2937; line-height:1; }
+  .jenkins-sub { font-size:12px; color:#6b7280; margin-top:5px; }
+  .status-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:14px; background:#fff; border-bottom:1px solid #e5e7eb; }
+  .build-card { border:1px solid #d8dee9; border-radius:7px; padding:12px; background:#fbfcfe; min-height:92px; }
+  .build-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; font-weight:800; }
+  .build-value { margin-top:7px; font-size:16px; font-weight:850; color:#111827; overflow-wrap:anywhere; }
+  .build-note { margin-top:5px; color:#6b7280; font-size:12px; line-height:1.35; }
+  .orb { width:12px; height:12px; border-radius:50%; display:inline-block; box-shadow:0 0 0 3px rgba(255,255,255,.8), 0 0 0 4px rgba(15,23,42,.08); }
+  .orb.success { background:#22c55e; }
+  .orb.warning { background:#f59e0b; }
+  .orb.danger { background:#ef4444; }
+  .orb.neutral { background:#94a3b8; }
+  .jenkins-body { display:grid; grid-template-columns:260px minmax(0,1fr); min-height:620px; }
+  .jenkins-side { background:#fff; border-right:1px solid #d8dee9; padding:12px; }
+  .side-action { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:6px; color:#334155; font-size:13px; font-weight:700; border:1px solid transparent; }
+  .side-action:hover { background:#f1f5f9; border-color:#e2e8f0; }
+  .side-dot { width:9px; height:9px; border-radius:50%; background:#94a3b8; }
+  .main-pane { padding:14px; min-width:0; }
+  .pane-grid { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(320px,.8fr); gap:14px; }
+  .panel { background:#fff; border:1px solid #d8dee9; border-radius:8px; overflow:hidden; }
+  .panel-head { padding:12px 14px; border-bottom:1px solid #e5e7eb; background:#fbfcfe; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .panel-title { font-weight:850; color:#111827; font-size:14px; }
+  .panel-body { padding:12px 14px; }
+  .job-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .job-table th, .job-table td { border-bottom:1px solid #edf2f7; padding:10px 8px; text-align:left; vertical-align:top; }
+  .job-table th { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; background:#f8fafc; }
+  .job-name { color:#2563eb; font-weight:850; }
+  .badge { display:inline-flex; padding:3px 8px; border-radius:999px; font-size:11px; font-weight:850; }
+  .badge.success { background:#dcfce7; color:#166534; }
+  .badge.warning { background:#fef3c7; color:#92400e; }
+  .badge.danger { background:#fee2e2; color:#991b1b; }
+  .console { background:#0f172a; color:#dbeafe; border-radius:7px; padding:11px 12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.45; overflow:auto; margin-top:8px; }
+  .console span { display:block; white-space:nowrap; }
+  @media (max-width: 1000px) {
+    .status-strip, .pane-grid, .jenkins-body { grid-template-columns:1fr; }
+    .jenkins-side { border-right:0; border-bottom:1px solid #d8dee9; }
+  }
+</style>
+
+<div class="jenkins-shell">
+  <div class="jenkins-top">
+    <div class="jenkins-logo">PW</div>
+    <div style="flex:1;">
+      <div class="jenkins-title">PartyWorld CI/CD</div>
+      <div class="jenkins-sub">Release, deployment, database backup, and local stack operations.</div>
+    </div>
+    <span class="badge {% if status.server_key_present %}warning{% else %}danger{% endif %}">
+      {{ 'Server auth blocked' if status.server_key_present else 'Server key missing' }}
+    </span>
+  </div>
+
+  <div class="status-strip">
+    <div class="build-card">
+      <div class="build-label">Branch</div>
+      <div class="build-value">{{ status.git_branch }}</div>
+      <div class="build-note">{{ status.git_commit }}</div>
+    </div>
+    <div class="build-card">
+      <div class="build-label">Workspace</div>
+      <div class="build-value">
+        <span class="orb {{ 'warning' if status.git_dirty else 'success' }}"></span>
+        {{ 'Dirty' if status.git_dirty else 'Clean' }}
+      </div>
+      <div class="build-note">Uncommitted changes are shown before release jobs.</div>
+    </div>
+    <div class="build-card">
+      <div class="build-label">Runtime</div>
+      <div class="build-value">
+        <span class="orb success"></span>
+        {{ 'Container' if status.running_in_container else 'Host Python' }}
+      </div>
+      <div class="build-note">{{ 'pw_webapp is serving this page.' if status.running_in_container else 'Host Docker CLI available when configured.' }}</div>
+    </div>
+    <div class="build-card">
+      <div class="build-label">Backups</div>
+      <div class="build-value">{{ status.dumps|length }} local dump{{ '' if status.dumps|length == 1 else 's' }}</div>
+      <div class="build-note">Inventory reads from <code>dumps/</code>.</div>
+    </div>
+  </div>
+
+  <div class="jenkins-body">
+    <div class="jenkins-side">
+      <div class="side-action"><span class="side-dot" style="background:#22c55e;"></span> New release build</div>
+      <div class="side-action"><span class="side-dot" style="background:#f59e0b;"></span> Server credential check</div>
+      <div class="side-action"><span class="side-dot" style="background:#3b82f6;"></span> Backup now</div>
+      <div class="side-action"><span class="side-dot" style="background:#8b5cf6;"></span> Refresh local data</div>
+      <div class="side-action"><span class="side-dot" style="background:#64748b;"></span> Configure jobs</div>
+      <div style="margin-top:14px;padding:10px;border:1px solid #e5e7eb;border-radius:7px;background:#f8fafc;">
+        <div style="font-weight:850;color:#111827;font-size:13px;">Server</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px;">{{ status.server_user }}@{{ status.server_host }}</div>
+        <div style="font-size:12px;color:#b45309;margin-top:8px;">{{ status.server_note }}</div>
+      </div>
+    </div>
+
+    <div class="main-pane">
+      <div class="pane-grid">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Jobs</div>
+            <span class="badge success">{{ workflows|length }} configured</span>
+          </div>
+          <table class="job-table">
+            <thead><tr><th></th><th>Job</th><th>Status</th><th>Purpose</th></tr></thead>
+            <tbody>
+              {% for workflow in workflows %}
+              <tr>
+                <td><span class="orb {{ workflow.health }}"></span></td>
+                <td class="job-name">{{ workflow.key }}/{{ workflow.title }}</td>
+                <td><span class="badge {{ 'warning' if workflow.health == 'warning' else 'success' }}">{{ workflow.status }}</span></td>
+                <td style="color:#475569;">{{ workflow.intent }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Build History</div>
+            <span class="badge warning">manual gate</span>
+          </div>
+          <div class="panel-body" style="display:grid;gap:10px;">
+            {% for build in build_history %}
+            <div style="border:1px solid #e5e7eb;border-radius:7px;padding:10px;">
+              <div style="display:flex;justify-content:space-between;gap:10px;">
+                <div style="font-weight:850;color:#111827;">{{ build.job }} {{ build.id }}</div>
+                <span class="badge {{ 'success' if build.result == 'SUCCESS' else 'warning' }}">{{ build.result }}</span>
+              </div>
+              <div style="font-size:12px;color:#64748b;margin-top:4px;">{{ build.when }} · {{ build.duration }}</div>
+              <div style="font-size:12px;color:#475569;margin-top:6px;">{{ build.note }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px;">
+        <div class="panel-head">
+          <div class="panel-title">Console Runbooks</div>
+          <span style="font-size:12px;color:#64748b;">copy and run from the terminal</span>
+        </div>
+        <div class="panel-body" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+          {% for workflow in workflows %}
+          <div>
+            <div style="font-weight:850;color:#111827;">{{ workflow.title }}</div>
+            <div class="console">
+              {% for command in workflow.commands %}
+              <span>$ {{ command }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px;">
+        <div class="panel-head">
+          <div class="panel-title">Backup Artifacts</div>
+          <span style="font-size:12px;color:#64748b;">local <code>dumps/</code></span>
+        </div>
+        {% if status.dumps %}
+        <table class="job-table">
+          <thead><tr><th>File</th><th>Size</th><th>Modified</th></tr></thead>
+          <tbody>
+            {% for dump in status.dumps %}
+            <tr><td class="job-name">{{ dump.name }}</td><td>{{ dump.size_mb }} MB</td><td>{{ dump.modified }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="panel-body" style="color:#64748b;font-size:13px;">No local dump files found yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -39,3 +39,14 @@ LightsailDefaultKey-*
 
 # Local DB dumps pulled for the Docker stack — never commit
 dumps/
+
+# Local agent/workspace state
+.claude/
+.openclaw/
+AGENTS.md
+AGENT_REFERENCE.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER_PROFILE.md

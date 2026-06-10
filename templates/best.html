@@ -28,7 +28,7 @@
           <th style="width:36px;">#</th><th>Product</th>
           <th class="r">Qty Sold</th><th class="r">Revenue ({{ filter_label }})</th>
           {% if compare == '1' and cmp_label %}
-          <th class="r" style="color:#714b67;">Revenue ({{ cmp_label }})</th>
+          <th class="r" style="color:var(--pd);">Revenue ({{ cmp_label }})</th>
           <th class="r">Change</th>
           {% endif %}
           <th class="r">Avg Price</th><th class="r">Score</th>
@@ -43,12 +43,12 @@
           <td style="color:#9ca3af;font-weight:600;">{% if r.rank == 1 %}<span style="color:#d97706;">1</span>{% else %}{{ r.rank }}{% endif %}</td>
           <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
           <td class="r">{{ '{:,.0f}'.format(r.qty|float) }}</td>
-          <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</td>
+          <td class="r" style="color:#059669;font-weight:600;">KES {{ '{:,.0f}'.format(r.revenue|float) }}</td>
           {% if compare == '1' and cmp_label %}
-          <td class="r" style="color:#714b67;">{% if cmp_rev %}KSH {{ '{:,.0f}'.format(cmp_rev) }}{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
+          <td class="r" style="color:var(--pd);">{% if cmp_rev %}KES {{ '{:,.0f}'.format(cmp_rev) }}{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
           <td class="r">{% if delta is not none %}<span style="font-size:12px;font-weight:700;font-family:monospace;color:{% if delta>=0 %}#059669{% else %}#dc2626{% endif %};">{% if delta>=0 %}+{% endif %}{{ delta }}%</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
           {% endif %}
-          <td class="r" style="color:#6b7280;">KSH {{ '{:,.0f}'.format(r.avg_price|float) }}</td>
+          <td class="r" style="color:#6b7280;">KES {{ '{:,.0f}'.format(r.avg_price|float) }}</td>
           <td class="r"><span style="background:#f5f0f4;color:var(--p);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;">{{ r.score }}%</span></td>
         </tr>
         {% endfor %}
@@ -98,9 +98,9 @@ function buildCharts() {
     type: 'bar',
     data: { labels, datasets: [{ label:'Revenue',data:revs,backgroundColor:PALETTE[0],borderRadius:4,borderSkipped:false }]},
     options: {
-      indexAxis:'y', plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+      indexAxis:'y', plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'KES '+c.parsed.x.toLocaleString()}}},
       scales: {
-        x:{type:'linear',ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},
+        x:{type:'linear',ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KES '+v.toLocaleString()},grid:{color:'#f3f4f6'}},
         y:{type:'category',ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
       }
     }
@@ -118,7 +118,7 @@ function buildCharts() {
       cutout:'60%',
       plugins:{
         legend:{position:'bottom',labels:{font:{size:11},padding:8,color:'#6b7280'}},
-        tooltip:{callbacks:{label:c=>{const t=top8.reduce((s,r)=>s+parseFloat(r.revenue),0);return c.label+': KSH '+c.parsed.toLocaleString()+' ('+Math.round(c.parsed/t*100)+'%)'}}}
+        tooltip:{callbacks:{label:c=>{const t=top8.reduce((s,r)=>s+parseFloat(r.revenue),0);return c.label+': KES '+c.parsed.toLocaleString()+' ('+Math.round(c.parsed/t*100)+'%)'}}}
       }
     }
   });

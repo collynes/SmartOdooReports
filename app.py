@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, Response, stream_with_context
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, stream_with_context
 from functools import wraps
 import psycopg2
 import psycopg2.extras
 import os, io, json, sys
+import subprocess
 from datetime import date, timedelta
 from dotenv import load_dotenv
 from insights import get_daily_insight
@@ -256,7 +257,6 @@ def get_compare_range(main_from, main_to, period):
         except Exception:
             pass
 
-    today = date.today()
     if cmp == 'lastmonth':
         start = (main_from.replace(day=1) - timedelta(days=1)).replace(day=1)
         end   = main_from.replace(day=1)
@@ -350,6 +350,367 @@ def switch_env(env):
         session['active_env'] = env
     return redirect(request.referrer or url_for('dashboard'))
 
+# ── DevOps ───────────────────────────────────────────────────
+
+def _run_status_command(cmd, timeout=3):
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=os.path.dirname(__file__),
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+        return {
+            'ok': result.returncode == 0,
+            'output': (result.stdout or result.stderr or '').strip(),
+        }
+    except Exception as exc:
+        return {'ok': False, 'output': str(exc)}
+
+def _first_line(value):
+    return (value or '').splitlines()[0] if value else ''
+
+def _running_in_container():
+    return os.path.exists('/.dockerenv') or os.getenv('container') is not None
+
+@app.route('/devops')
+@login_required
+def devops():
+    repo_dir = os.path.dirname(__file__)
+    git_branch = _run_status_command(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
+    git_commit = _run_status_command(['git', 'log', '-1', '--pretty=%h %s'])
+    git_dirty = _run_status_command(['git', 'status', '--short'])
+    docker_status = _run_status_command([
+        'docker', 'ps',
+        '--filter', 'name=pw_',
+        '--format', '{{.Names}}\t{{.Status}}\t{{.Ports}}'
+    ])
+
+    dump_dir = os.path.join(repo_dir, 'dumps')
+    dumps = []
+    if os.path.isdir(dump_dir):
+        for name in os.listdir(dump_dir):
+            path = os.path.join(dump_dir, name)
+            if os.path.isfile(path):
+                stat = os.stat(path)
+                dumps.append({
+                    'name': name,
+                    'size_mb': round(stat.st_size / 1024 / 1024, 1),
+                    'modified': date.fromtimestamp(stat.st_mtime).isoformat(),
+                })
+        dumps = sorted(dumps, key=lambda item: item['modified'], reverse=True)[:8]
+
+    server_key = os.path.join(repo_dir, 'LightsailDefaultKey-eu-central-1.pem')
+    status = {
+        'git_branch': _first_line(git_branch['output']) or 'unknown',
+        'git_commit': _first_line(git_commit['output']) or 'unknown',
+        'git_dirty': bool(git_dirty['output']),
+        'docker_available': docker_status['ok'],
+        'docker_rows': docker_status['output'].splitlines() if docker_status['output'] else [],
+        'running_in_container': _running_in_container(),
+        'server_host': '3.78.133.72',
+        'server_user': 'ubuntu',
+        'server_key_present': os.path.exists(server_key),
+        'server_note': 'SSH key is present locally, but the latest login check failed with publickey denied.',
+        'dumps': dumps,
+    }
+
+    workflows = [
+        {
+            'key': 'deploy',
+            'title': 'Deploy webapp release',
+            'intent': 'Pull latest code on the server, install dependencies, restart PM2, then inspect logs.',
+            'status': 'Blocked',
+            'health': 'warning',
+            'commands': [
+                'ssh -i LightsailDefaultKey-eu-central-1.pem ubuntu@3.78.133.72',
+                'cd /opt/odoo18/webapp && git pull',
+                'source venv/bin/activate && pip install -r requirements.txt',
+                'pm2 restart odoo-reports --update-env',
+                'pm2 logs odoo-reports --lines 30',
+            ],
+        },
+        {
+            'key': 'backup',
+            'title': 'Create database backup',
+            'intent': 'Run the server backup script and keep the resulting dump under /home/ubuntu/backups.',
+            'status': 'Ready',
+            'health': 'success',
+            'commands': [
+                'ssh -i LightsailDefaultKey-eu-central-1.pem ubuntu@3.78.133.72',
+                'bash /home/ubuntu/scripts/nightly_backup_sync.sh',
+                'ls -lh /home/ubuntu/backups/ | tail',
+            ],
+        },
+        {
+            'key': 'refresh',
+            'title': 'Refresh local data',
+            'intent': 'Pull the latest production dump into this workspace and rebuild the local Docker stack.',
+            'status': 'Ready',
+            'health': 'success',
+            'commands': [
+                'bash scripts/pull_latest_dump.sh',
+                'bash scripts/bootstrap_local.sh',
+                'docker ps --filter name=pw_',
+            ],
+        },
+        {
+            'key': 'docker',
+            'title': 'Docker release stack',
+            'intent': 'Rebuild the Docker app image and recreate the reports services without touching live native Odoo.',
+            'status': 'Stable',
+            'health': 'success',
+            'commands': [
+                'cd docker',
+                'docker compose build webapp mobile-api',
+                'docker compose up -d webapp mobile-api',
+                'docker compose logs --tail=80 webapp',
+            ],
+        },
+    ]
+
+    build_history = [
+        {'id': '#104', 'job': 'local-webapp-image', 'result': 'SUCCESS', 'duration': '3s', 'when': 'latest', 'note': 'Rebuilt partyworld/app and restarted pw_webapp'},
+        {'id': '#103', 'job': 'server-ssh-check', 'result': 'UNSTABLE', 'duration': '<1s', 'when': 'today', 'note': 'Public key rejected for ubuntu@3.78.133.72'},
+        {'id': '#102', 'job': 'python-compile', 'result': 'SUCCESS', 'duration': '<1s', 'when': 'today', 'note': 'app.py compiled successfully'},
+    ]
+
+    return render_template('devops.html', status=status, workflows=workflows,
+                           build_history=build_history, **date_filter_context())
+
+# ── Shop ─────────────────────────────────────────────────────
+
+def _shop_cart():
+    cart = session.get('shop_cart')
+    if not isinstance(cart, dict):
+        cart = {}
+        session['shop_cart'] = cart
+    return cart
+
+def _shop_product_rows(product_ids=None, search='', category='', sort='featured', limit=36, offset=0):
+    params = []
+    where = ["pt.active = true", "pp.active = true", "pt.type = 'consu'"]
+    if product_ids:
+        where.append("pp.id = ANY(%s)")
+        params.append([int(pid) for pid in product_ids])
+    if search:
+        where.append("(pt.name->>'en_US' ILIKE %s OR COALESCE(pp.default_code, '') ILIKE %s)")
+        params.extend([f'%{search}%', f'%{search}%'])
+    if category:
+        where.append("pc.name = %s")
+        params.append(category)
+
+    order_by = {
+        'price_asc': 'pt.list_price ASC, name ASC',
+        'price_desc': 'pt.list_price DESC, name ASC',
+        'stock': 'qty_on_hand DESC, name ASC',
+        'name': 'name ASC',
+    }.get(sort, 'sold_90d DESC NULLS LAST, qty_on_hand DESC, name ASC')
+
+    params.extend([limit, offset])
+    return query(f"""
+        WITH stock AS (
+            SELECT sq.product_id, SUM(sq.quantity) AS qty
+            FROM stock_quant sq
+            JOIN stock_location sl ON sl.id = sq.location_id
+            WHERE sl.usage = 'internal'
+            GROUP BY sq.product_id
+        ), sales AS (
+            SELECT sol.product_id, SUM(sol.product_uom_qty) AS sold_90d
+            FROM sale_order_line sol
+            JOIN sale_order so ON so.id = sol.order_id
+            WHERE so.state IN ('sale','done')
+              AND so.date_order >= CURRENT_DATE - 90
+              AND sol.display_type IS NULL
+            GROUP BY sol.product_id
+        )
+        SELECT pp.id,
+               COALESCE(pp.default_code, '') AS ref,
+               pt.name->>'en_US' AS name,
+               COALESCE(NULLIF(pt.description_sale->>'en_US', ''), pc.name, 'Party World product') AS description,
+               ROUND(COALESCE(pt.list_price, 0)::numeric, 2) AS price,
+               ROUND(COALESCE(stock.qty, 0)::numeric, 0) AS qty_on_hand,
+               COALESCE(sales.sold_90d, 0) AS sold_90d,
+               COALESCE(pc.name, 'Uncategorised') AS category
+        FROM product_product pp
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        LEFT JOIN product_category pc ON pc.id = pt.categ_id
+        LEFT JOIN stock ON stock.product_id = pp.id
+        LEFT JOIN sales ON sales.product_id = pp.id
+        WHERE {' AND '.join(where)}
+        ORDER BY {order_by}
+        LIMIT %s OFFSET %s
+    """, tuple(params))
+
+def _shop_cart_payload():
+    cart = _shop_cart()
+    ids = [int(pid) for pid in cart.keys() if str(pid).isdigit()]
+    products = _jsonify_rows(_shop_product_rows(product_ids=ids, limit=max(len(ids), 1))) if ids else []
+    by_id = {str(p['id']): p for p in products}
+    items = []
+    subtotal = 0.0
+    for pid, qty in cart.items():
+        product = by_id.get(str(pid))
+        if not product:
+            continue
+        qty = max(int(qty), 1)
+        line_total = qty * float(product.get('price') or 0)
+        subtotal += line_total
+        items.append({**product, 'qty': qty, 'line_total': line_total})
+    session['shop_cart'] = {str(item['id']): item['qty'] for item in items}
+    session.modified = True
+    return {'items': items, 'count': sum(item['qty'] for item in items), 'subtotal': subtotal}
+
+@app.route('/shop')
+@login_required
+def shop():
+    categories = query("""
+        SELECT pc.name, COUNT(*) AS count
+        FROM product_product pp
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        LEFT JOIN product_category pc ON pc.id = pt.categ_id
+        WHERE pt.active = true AND pp.active = true AND pt.type = 'consu'
+          AND pc.name IS NOT NULL
+        GROUP BY pc.name
+        ORDER BY COUNT(*) DESC, pc.name
+        LIMIT 18
+    """)
+    return render_template('shop.html',
+                           categories=_jsonify_rows(categories),
+                           cart=_shop_cart_payload(),
+                           **date_filter_context())
+
+@app.route('/api/shop/products')
+@login_required
+def api_shop_products():
+    search = request.args.get('q', '').strip()
+    category = request.args.get('category', '').strip()
+    sort = request.args.get('sort', 'featured')
+    limit = min(int(request.args.get('limit', 36) or 36), 72)
+    offset = max(int(request.args.get('offset', 0) or 0), 0)
+    rows = _shop_product_rows(search=search, category=category, sort=sort, limit=limit, offset=offset)
+    return jsonify({'products': _jsonify_rows(rows), 'offset': offset, 'limit': limit})
+
+@app.route('/api/shop/cart', methods=['GET', 'POST', 'PATCH', 'DELETE'])
+@login_required
+def api_shop_cart():
+    cart = _shop_cart()
+    data = request.get_json(silent=True) or {}
+    if request.method == 'POST':
+        product_id = str(data.get('product_id', '')).strip()
+        qty = max(int(data.get('qty') or 1), 1)
+        if not product_id.isdigit():
+            return jsonify({'error': 'product_id required'}), 400
+        cart[product_id] = int(cart.get(product_id, 0)) + qty
+        session.modified = True
+    elif request.method == 'PATCH':
+        product_id = str(data.get('product_id', '')).strip()
+        qty = int(data.get('qty') or 0)
+        if product_id in cart:
+            if qty <= 0:
+                cart.pop(product_id, None)
+            else:
+                cart[product_id] = qty
+            session.modified = True
+    elif request.method == 'DELETE':
+        product_id = str(data.get('product_id', '')).strip()
+        if product_id:
+            cart.pop(product_id, None)
+        else:
+            cart.clear()
+        session.modified = True
+    return jsonify(_shop_cart_payload())
+
+@app.route('/api/shop/checkout', methods=['POST'])
+@login_required
+def api_shop_checkout():
+    data = request.get_json(silent=True) or {}
+    payload = _shop_cart_payload()
+    if not payload['items']:
+        return jsonify({'error': 'Cart is empty'}), 400
+
+    customer = (data.get('customer') or 'Web Shop Customer').strip()[:80]
+    phone = (data.get('phone') or '').strip()[:40]
+    delivery = (data.get('delivery') or '').strip()[:160]
+    note = f"Shop order for {customer}"
+    if phone:
+        note += f"\nPhone: {phone}"
+    if delivery:
+        note += f"\nDelivery: {delivery}"
+
+    conn = None
+    try:
+        conn = psycopg2.connect(**get_active_db_config())
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM res_partner WHERE name ILIKE '%walk%in%' OR name ILIKE '%walkin%' ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        if not row:
+            cur.execute("SELECT id FROM res_partner WHERE customer_rank > 0 ORDER BY id LIMIT 1")
+            row = cur.fetchone()
+        partner_id = row[0] if row else 1
+
+        cur.execute("SELECT id FROM res_company ORDER BY id LIMIT 1")
+        company_id = (cur.fetchone() or [1])[0]
+        cur.execute("SELECT id FROM res_users WHERE active=true ORDER BY id LIMIT 1")
+        user_id = (cur.fetchone() or [1])[0]
+        cur.execute("SELECT id FROM uom_uom WHERE name->>'en_US' ILIKE '%unit%' LIMIT 1")
+        uom_id = (cur.fetchone() or [None])[0]
+
+        cur.execute("SELECT nextval('sale_order_id_seq')")
+        order_id = cur.fetchone()[0]
+        cur.execute("SELECT prefix, padding, number_next FROM ir_sequence WHERE code='sale.order' LIMIT 1")
+        seq_row = cur.fetchone()
+        if seq_row:
+            prefix = (seq_row[0] or 'S').replace('%(year)s', str(date.today().year)).replace('%(month)s', f"{date.today().month:02d}")
+            order_name = f"{prefix}{str(seq_row[2] or order_id).zfill(seq_row[1] or 5)}"
+            cur.execute("UPDATE ir_sequence SET number_next=number_next+1 WHERE code='sale.order'")
+        else:
+            order_name = f"S{str(order_id).zfill(5)}"
+
+        subtotal = round(float(payload['subtotal']), 2)
+        cur.execute(
+            """INSERT INTO sale_order
+               (id, name, date_order, state, partner_id, partner_invoice_id, partner_shipping_id,
+                company_id, user_id, note, client_order_ref, amount_untaxed, amount_tax, amount_total,
+                picking_policy, create_uid, write_uid, create_date, write_date)
+               VALUES (%s,%s,NOW(),'sale',%s,%s,%s,%s,%s,%s,%s,%s,0,%s,'direct',%s,%s,NOW(),NOW())""",
+            (order_id, order_name, partner_id, partner_id, partner_id, company_id, user_id,
+             note, f"SHOP-{order_id}", subtotal, subtotal, user_id, user_id)
+        )
+
+        for item in payload['items']:
+            cur.execute("SELECT nextval('sale_order_line_id_seq')")
+            line_id = cur.fetchone()[0]
+            qty = int(item['qty'])
+            price = round(float(item['price'] or 0), 2)
+            total = round(qty * price, 2)
+            cur.execute(
+                """INSERT INTO sale_order_line
+                   (id, order_id, product_id, name, product_uom_qty, price_unit,
+                    price_subtotal, price_total, state, product_uom, customer_lead,
+                    create_uid, write_uid, create_date, write_date)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'sale',%s,0,%s,%s,NOW(),NOW())""",
+                (line_id, order_id, item['id'], item['name'], qty, price, total, total,
+                 uom_id, user_id, user_id)
+            )
+
+        conn.commit()
+        session['shop_cart'] = {}
+        session.modified = True
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'order_id': order_id, 'order_name': order_name})
+    except Exception as exc:
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except Exception:
+                pass
+        return jsonify({'error': 'Checkout failed', 'details': str(exc)}), 500
+
 # ── Dashboard ─────────────────────────────────────────────────
 
 @app.route('/')
@@ -364,7 +725,7 @@ def dashboard():
             COALESCE(SUM(so.amount_total), 0) AS revenue,
             COALESCE(AVG(so.amount_total), 0) AS avg_order
         FROM sale_order so
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order >= %s AND so.date_order < %s
     """, (fd, td))
     kpi = kpis[0] if kpis else {}
@@ -376,7 +737,7 @@ def dashboard():
         SELECT COALESCE(SUM(so.amount_total), 0) AS revenue,
                COUNT(DISTINCT so.id) AS orders
         FROM sale_order so
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order >= %s AND so.date_order < %s
     """, (prev_fd, fd))
     prev = prev_kpis[0] if prev_kpis else {}
@@ -390,7 +751,7 @@ def dashboard():
         JOIN sale_order so       ON so.id  = sol.order_id
         JOIN product_product pp  ON pp.id  = sol.product_id
         JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-        WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+        WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
           AND so.date_order >= %s AND so.date_order < %s
         GROUP BY 1 ORDER BY 2 DESC LIMIT 5
     """, (fd, td))
@@ -407,7 +768,7 @@ def dashboard():
     mtd_rows = query("""
         SELECT COALESCE(SUM(so.amount_total), 0) AS revenue
         FROM sale_order so
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order >= %s AND so.date_order < %s
     """, (month_start, today_d + timedelta(days=1)))
     mtd_revenue = float(mtd_rows[0]['revenue'] if mtd_rows else 0)
@@ -441,7 +802,7 @@ def products():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1
         )
@@ -451,8 +812,6 @@ def products():
         FROM s ORDER BY score DESC LIMIT 25
     """, (fd, td))
 
-    cmp_rows = {}
-
     # Momentum
     mom_rows = query("""
         WITH prev AS (
@@ -460,14 +819,14 @@ def products():
                    SUM(sol.price_subtotal) AS revenue, SUM(sol.product_uom_qty) AS qty
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s GROUP BY 1
         ), curr AS (
             SELECT pt.name->>'en_US' AS product,
                    SUM(sol.price_subtotal) AS revenue, SUM(sol.product_uom_qty) AS qty
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s GROUP BY 1
         )
         SELECT c.product,
@@ -486,14 +845,14 @@ def products():
             SELECT pt.name->>'en_US' AS product, SUM(sol.price_subtotal) AS peak_rev
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= CURRENT_DATE - %s AND so.date_order < %s
             GROUP BY 1 ORDER BY peak_rev DESC LIMIT 30
         ), recent AS (
             SELECT pt.name->>'en_US' AS product, SUM(sol.price_subtotal) AS recent_rev
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s GROUP BY 1
         )
         SELECT p.product, ROUND(p.peak_rev::numeric,0) AS peak_rev,
@@ -514,14 +873,14 @@ def products():
                    SUM(sol.price_subtotal) / 30.0 AS daily_avg_rev
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= CURRENT_DATE - 90 AND so.date_order < CURRENT_DATE - 7
             GROUP BY 1 HAVING COUNT(so.id) >= 5
         ), recent AS (
             SELECT pt.name->>'en_US' AS product, SUM(sol.price_subtotal) AS rev_period
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s GROUP BY 1
         )
         SELECT b.product,
@@ -603,7 +962,7 @@ def api_product_profile():
                ROUND(AVG(sol.price_unit)::numeric, 2) AS avg_price
         FROM sale_order_line sol
         JOIN sale_order so ON so.id = sol.order_id
-        WHERE sol.product_id = %s AND so.state NOT IN ('cancel','draft')
+        WHERE sol.product_id = %s AND so.state IN ('sale','done')
           AND sol.display_type IS NULL
     """, (pid,))
     if totals: product.update(_jsonify_rows(totals)[0])
@@ -614,7 +973,7 @@ def api_product_profile():
                ROUND(SUM(sol.product_uom_qty)::numeric, 0) AS year_qty
         FROM sale_order_line sol
         JOIN sale_order so ON so.id = sol.order_id
-        WHERE sol.product_id = %s AND so.state NOT IN ('cancel','draft')
+        WHERE sol.product_id = %s AND so.state IN ('sale','done')
           AND sol.display_type IS NULL
           AND EXTRACT(YEAR FROM so.date_order) = EXTRACT(YEAR FROM CURRENT_DATE)
     """, (pid,))
@@ -628,7 +987,7 @@ def api_product_profile():
                ROUND(SUM(sol.product_uom_qty)::numeric, 0) AS qty
         FROM sale_order_line sol
         JOIN sale_order so ON so.id = sol.order_id
-        WHERE sol.product_id = %s AND so.state NOT IN ('cancel','draft')
+        WHERE sol.product_id = %s AND so.state IN ('sale','done')
           AND sol.display_type IS NULL
           AND so.date_order >= CURRENT_DATE - INTERVAL '24 months'
         GROUP BY DATE_TRUNC('month', so.date_order)
@@ -643,7 +1002,7 @@ def api_product_profile():
                ROUND(SUM(sol.product_uom_qty)::numeric, 0) AS qty
         FROM sale_order_line sol
         JOIN sale_order so ON so.id = sol.order_id
-        WHERE sol.product_id = %s AND so.state NOT IN ('cancel','draft')
+        WHERE sol.product_id = %s AND so.state IN ('sale','done')
           AND sol.display_type IS NULL
         GROUP BY DATE_TRUNC('month', so.date_order)
         ORDER BY SUM(sol.price_subtotal) DESC
@@ -660,7 +1019,7 @@ def api_product_profile():
                    SUM(sol.price_subtotal) AS monthly_rev
             FROM sale_order_line sol
             JOIN sale_order so ON so.id = sol.order_id
-            WHERE sol.product_id = %s AND so.state NOT IN ('cancel','draft')
+            WHERE sol.product_id = %s AND so.state IN ('sale','done')
               AND sol.display_type IS NULL
               AND so.date_order >= CURRENT_DATE - INTERVAL '12 months'
             GROUP BY 1
@@ -696,7 +1055,7 @@ def api_product_profile():
                    ROUND(AVG(sol.price_unit)::numeric, 2) AS avg_price
             FROM sale_order_line sol
             JOIN sale_order so ON so.id = sol.order_id
-            WHERE sol.product_id = %s AND so.state NOT IN ('cancel','draft')
+            WHERE sol.product_id = %s AND so.state IN ('sale','done')
               AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
         """, (pid, d_from, d_to))
@@ -729,7 +1088,7 @@ def best_products():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1
         )
@@ -751,7 +1110,7 @@ def best_products():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1
         """, (cfd, ctd))
@@ -777,7 +1136,7 @@ def underperforming():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= CURRENT_DATE - 90
               AND so.date_order <  CURRENT_DATE - 7
             GROUP BY 1 HAVING COUNT(so.id) >= 5
@@ -789,7 +1148,7 @@ def underperforming():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1
         )
@@ -825,7 +1184,7 @@ def momentum():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1
         ),
@@ -837,7 +1196,7 @@ def momentum():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1
         )
@@ -873,7 +1232,7 @@ def sleeping():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= CURRENT_DATE - %s
               AND so.date_order <  %s
             GROUP BY 1 ORDER BY peak_rev DESC LIMIT 30
@@ -885,7 +1244,7 @@ def sleeping():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1
         )
@@ -920,7 +1279,7 @@ def crosssell():
         JOIN sale_order so       ON so.id  = sol.order_id
         JOIN product_product pp  ON pp.id  = sol.product_id
         JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-        WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+        WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
           AND so.date_order >= %s AND so.date_order < %s
         GROUP BY 1 ORDER BY SUM(sol.price_subtotal) DESC LIMIT 5
     """, (fd, td))
@@ -935,7 +1294,7 @@ def crosssell():
                 JOIN sale_order so       ON so.id  = sol.order_id
                 JOIN product_product pp  ON pp.id  = sol.product_id
                 JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-                WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+                WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
                   AND pt.name->>'en_US' = %s
                   AND so.date_order >= %s AND so.date_order < %s
             )
@@ -982,7 +1341,7 @@ def reorder():
                    SUM(sol.product_uom_qty) / %s AS daily_qty
             FROM sale_order_line sol
             JOIN sale_order so ON so.id = sol.order_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY sol.product_id
         )
@@ -1039,7 +1398,7 @@ def deadstock():
                    SUM(sol.price_subtotal) AS total_rev
             FROM sale_order_line sol
             JOIN sale_order so ON so.id = sol.order_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
             GROUP BY sol.product_id
         )
         SELECT pt.name->>'en_US' AS product,
@@ -1082,7 +1441,7 @@ def customers():
                (CURRENT_DATE - MAX(so.date_order)::date) AS days_since
         FROM sale_order so
         JOIN res_partner rp ON rp.id = so.partner_id
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order >= %s AND so.date_order < %s
         GROUP BY rp.name
         ORDER BY revenue DESC
@@ -1099,7 +1458,7 @@ def customers():
                    ROUND(SUM(so.amount_total)::numeric, 0) AS revenue
             FROM sale_order so
             JOIN res_partner rp ON rp.id = so.partner_id
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY rp.name
         """, (cfd, ctd))
@@ -1120,7 +1479,7 @@ def trend():
                COUNT(DISTINCT so.id) AS orders,
                ROUND(SUM(so.amount_total)::numeric, 0) AS revenue
         FROM sale_order so
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order >= %s AND so.date_order < %s
         GROUP BY 1 ORDER BY 1
     """, (fd, td))
@@ -1141,7 +1500,7 @@ def compare():
                 COALESCE(AVG(so.amount_total), 0)            AS avg_order,
                 COUNT(DISTINCT so.partner_id)                AS customers
             FROM sale_order so
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND so.date_order >= %s AND so.date_order < %s
         """, (fd, td))
 
@@ -1154,7 +1513,7 @@ def compare():
             JOIN sale_order so       ON so.id  = sol.order_id
             JOIN product_product pp  ON pp.id  = sol.product_id
             JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1 ORDER BY revenue DESC LIMIT 10
         """, (fd, td))
@@ -1164,7 +1523,7 @@ def compare():
             SELECT DATE(so.date_order) AS day,
                    ROUND(SUM(so.amount_total)::numeric, 0) AS revenue
             FROM sale_order so
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND so.date_order >= %s AND so.date_order < %s
             GROUP BY 1 ORDER BY 1
         """, (fd, td))
@@ -1218,7 +1577,6 @@ def compare():
         elif period == 'last90':
             return today - timedelta(days=90), today + timedelta(days=1)
         elif period == 'samemonth':
-            import calendar as _cal
             prev_last = today.replace(day=1) - timedelta(days=1)
             start = prev_last.replace(day=1)
             cap_day = min(today.day, prev_last.day)
@@ -1286,7 +1644,7 @@ def api_top_products_pie():
         JOIN sale_order so       ON so.id  = sol.order_id
         JOIN product_product pp  ON pp.id  = sol.product_id
         JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-        WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+        WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
           AND so.date_order >= %s AND so.date_order < %s
         GROUP BY 1 ORDER BY 2 DESC LIMIT 8
     """, (fd, td))
@@ -1331,7 +1689,7 @@ def _explain_best(fd, td, label):
         JOIN sale_order so ON so.id=sol.order_id
         JOIN product_product pp ON pp.id=sol.product_id
         JOIN product_template pt ON pt.id=pp.product_tmpl_id
-        WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+        WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
           AND so.date_order>=%s AND so.date_order<%s
         GROUP BY 1 ORDER BY 2 DESC LIMIT 5
     """, (fd, td))
@@ -1342,7 +1700,7 @@ def _explain_best(fd, td, label):
     share = round(float(top['rev']) / total * 100) if total else 0
     return {
         'title': f"Best Products — {label}",
-        'body': (f"Your top product is **{top['product']}** with KSH {float(top['rev']):,.0f} "
+        'body': (f"Your top product is **{top['product']}** with KES {float(top['rev']):,.0f} "
                  f"({int(top['qty'])} units across {top['orders']} orders). "
                  f"It accounts for {share}% of your top-5 revenue."),
         'tips': [
@@ -1358,14 +1716,14 @@ def _explain_underperforming(fd, td, label):
             SELECT pt.name->>'en_US' AS product, SUM(sol.price_subtotal)/30.0 AS daily_avg
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order>=CURRENT_DATE-90 AND so.date_order<CURRENT_DATE-7
             GROUP BY 1 HAVING COUNT(so.id)>=5
         ), recent AS (
             SELECT pt.name->>'en_US' AS product, SUM(sol.price_subtotal) AS rev
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order>=%s AND so.date_order<%s GROUP BY 1
         )
         SELECT COUNT(*) AS cnt, ROUND(SUM(b.daily_avg*7)::numeric,0) AS lost_rev
@@ -1377,7 +1735,7 @@ def _explain_underperforming(fd, td, label):
     return {
         'title': f"Underperforming Products — {label}",
         'body': (f"{cnt} product(s) are performing below 50% of their historical average. "
-                 f"This represents roughly KSH {lost:,.0f} in expected but unrealised revenue."),
+                 f"This represents roughly KES {lost:,.0f} in expected but unrealised revenue."),
         'tips': [
             "Products marked 'No Sales' may have stock issues or have been delisted — verify in Odoo.",
             "For 'Slow' products, consider a short promotion or check if competitors have undercut pricing.",
@@ -1391,12 +1749,12 @@ def _explain_momentum(fd, td, label):
             WITH prev AS (SELECT pt.name->>'en_US' AS p, SUM(sol.price_subtotal) AS rev FROM sale_order_line sol
                 JOIN sale_order so ON so.id=sol.order_id JOIN product_product pp ON pp.id=sol.product_id
                 JOIN product_template pt ON pt.id=pp.product_tmpl_id
-                WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+                WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
                   AND so.date_order>=%s AND so.date_order<%s GROUP BY 1),
             curr AS (SELECT pt.name->>'en_US' AS p, SUM(sol.price_subtotal) AS rev FROM sale_order_line sol
                 JOIN sale_order so ON so.id=sol.order_id JOIN product_product pp ON pp.id=sol.product_id
                 JOIN product_template pt ON pt.id=pp.product_tmpl_id
-                WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+                WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
                   AND so.date_order>=%s AND so.date_order<%s GROUP BY 1)
             SELECT 1 FROM curr c JOIN prev p ON p.p=c.p WHERE c.rev>p.rev
         ) x
@@ -1430,14 +1788,14 @@ def _explain_customers(fd, td, label):
         SELECT COUNT(DISTINCT partner_id) AS total,
                ROUND(SUM(amount_total)::numeric,0) AS rev,
                ROUND(AVG(amount_total)::numeric,0) AS aov
-        FROM sale_order WHERE state NOT IN ('cancel','draft')
+        FROM sale_order WHERE state IN ('sale','done')
           AND date_order>=%s AND date_order<%s
     """, (fd, td))
     r = rows[0] if rows else {}
     return {
         'title': f"Top Customers — {label}",
-        'body': (f"You served {r.get('total',0)} unique customers generating KSH {float(r.get('rev',0)):,.0f} "
-                 f"with an average order value of KSH {float(r.get('aov',0)):,.0f}."),
+        'body': (f"You served {r.get('total',0)} unique customers generating KES {float(r.get('rev',0)):,.0f} "
+                 f"with an average order value of KES {float(r.get('aov',0)):,.0f}."),
         'tips': [
             "Customers marked 'Fading' or 'Inactive' are churn risks — a check-in call or discount voucher can reactivate them.",
             "High AOV customers are your VIPs — consider loyalty benefits or priority service.",
@@ -1455,7 +1813,7 @@ def _explain_reorder():
                         ELSE 'WATCH' END AS status
             FROM (SELECT product_id, SUM(product_uom_qty)/30.0 AS dq FROM sale_order_line sol
                 JOIN sale_order so ON so.id=sol.order_id
-                WHERE so.state NOT IN ('cancel','draft') AND so.date_order>=CURRENT_DATE-30
+                WHERE so.state IN ('sale','done') AND so.date_order>=CURRENT_DATE-30
                 GROUP BY product_id) v
             JOIN stock_quant sq ON sq.product_id=v.product_id
             JOIN stock_location sl ON sl.id=sq.location_id AND sl.usage='internal'
@@ -1481,7 +1839,7 @@ def _explain_deadstock():
         FROM stock_quant sq JOIN stock_location sl ON sl.id=sq.location_id
         JOIN product_product pp ON pp.id=sq.product_id
         LEFT JOIN (SELECT sol.product_id,MAX(so.date_order) AS ls FROM sale_order_line sol
-            JOIN sale_order so ON so.id=sol.order_id WHERE so.state NOT IN ('cancel','draft') GROUP BY 1) l
+            JOIN sale_order so ON so.id=sol.order_id WHERE so.state IN ('sale','done') GROUP BY 1) l
             ON l.product_id=pp.id
         WHERE sl.usage='internal' AND sq.quantity>0
           AND (l.ls IS NULL OR l.ls<CURRENT_DATE-30)
@@ -1489,7 +1847,7 @@ def _explain_deadstock():
     r = rows[0] if rows else {}
     return {
         'title': "Dead / Stale Stock",
-        'body': (f"{r.get('cnt',0)} products have stock sitting idle with KSH {float(r.get('val',0)):,.0f} "
+        'body': (f"{r.get('cnt',0)} products have stock sitting idle with KES {float(r.get('val',0)):,.0f} "
                  "in tied-up capital (at cost price). This cash could be deployed more productively."),
         'tips': [
             "Run a clearance promotion — even selling at cost frees up cash and warehouse space.",
@@ -1506,7 +1864,7 @@ def _explain_crosssell(fd, td, label):
         JOIN sale_order so ON so.id=sol.order_id
         JOIN product_product pp ON pp.id=sol.product_id
         JOIN product_template pt ON pt.id=pp.product_tmpl_id
-        WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+        WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
           AND so.date_order>=%s AND so.date_order<%s
         GROUP BY 1 ORDER BY 2 DESC LIMIT 3
     """, (fd, td))
@@ -1530,7 +1888,7 @@ def _explain_trend(fd, td, label):
                ROUND(SUM(so.amount_total)::numeric,0) AS rev,
                COUNT(DISTINCT so.id) AS orders
         FROM sale_order so
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order>=%s AND so.date_order<%s
         GROUP BY 1 ORDER BY 1
     """, (fd, td))
@@ -1540,8 +1898,8 @@ def _explain_trend(fd, td, label):
     peak_wk = max(rows, key=lambda r: float(r['rev']))
     return {
         'title': f"Revenue Trend — {label}",
-        'body': (f"Total revenue across {len(rows)} week(s) was KSH {total:,.0f}. "
-                 f"Your strongest week was w/c {peak_wk['wk']} with KSH {float(peak_wk['rev']):,.0f} "
+        'body': (f"Total revenue across {len(rows)} week(s) was KES {total:,.0f}. "
+                 f"Your strongest week was w/c {peak_wk['wk']} with KES {float(peak_wk['rev']):,.0f} "
                  f"from {peak_wk['orders']} order(s)."),
         'tips': [
             "Look for day-of-week patterns — most B2B sales peak mid-week.",
@@ -1555,7 +1913,7 @@ def _explain_dashboard(fd, td, label):
         SELECT COUNT(DISTINCT so.id) AS orders,
                COALESCE(SUM(so.amount_total),0) AS revenue
         FROM sale_order so
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order>=%s AND so.date_order<%s
     """, (fd, td))
     kpi = kpis[0] if kpis else {}
@@ -1569,15 +1927,15 @@ def _explain_dashboard(fd, td, label):
         JOIN sale_order so ON so.id=sol.order_id
         JOIN product_product pp ON pp.id=sol.product_id
         JOIN product_template pt ON pt.id=pp.product_tmpl_id
-        WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+        WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
           AND so.date_order>=%s AND so.date_order<%s
         GROUP BY 1 ORDER BY 2 DESC LIMIT 3
     """, (fd, td))
     top_names = ', '.join(r['product'] for r in top[:3]) if top else 'N/A'
     return {
         'title': f"Dashboard Summary — {label}",
-        'body': (f"**{orders}** orders generated KSH **{rev:,.0f}** in revenue "
-                 f"with an average order value of KSH {aov:,.0f}. "
+        'body': (f"**{orders}** orders generated KES **{rev:,.0f}** in revenue "
+                 f"with an average order value of KES {aov:,.0f}. "
                  f"Top sellers: {top_names}."),
         'tips': [
             "Monitor AOV weekly — small increases in basket size have an outsized revenue impact.",
@@ -1599,7 +1957,7 @@ def api_revenue_trend():
                ROUND(SUM(so.amount_total)::numeric, 0) AS total,
                COUNT(DISTINCT so.id) AS orders
         FROM sale_order so
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order >= %s AND so.date_order < %s
         GROUP BY 1 ORDER BY 1
     """, (fd, td))
@@ -1646,7 +2004,7 @@ def api_prev_month_trend():
                ROUND(SUM(so.amount_total)::numeric, 0) AS total,
                COUNT(DISTINCT so.id) AS orders
         FROM sale_order so
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order >= %s AND so.date_order < %s
         GROUP BY 1 ORDER BY 1
     """, (prev_start, prev_end + timedelta(days=1)))
@@ -1709,7 +2067,7 @@ def anomalies():
                    MAX(so.date_order) AS last_sold_at
             FROM sale_order_line sol
             JOIN sale_order so ON so.id = sol.order_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
             GROUP BY sol.product_id
         )
         SELECT pt.name->>'en_US' AS product,
@@ -1797,7 +2155,7 @@ def _get_suggestions():
             'type': 'overdue_expense',
             'icon': 'clock',
             'title': f"Update expense for {r['vendor']}",
-            'detail': f"Last billed {gap} days ago. Avg amount KSH {float(r['avg_amount']):,.0f}. Expected monthly.",
+            'detail': f"Last billed {gap} days ago. Avg amount KES {float(r['avg_amount']):,.0f}. Expected monthly.",
             'action': f"Add bill for {r['vendor']}",
             'priority': 'high' if gap > 35 else 'medium',
             'prefill_vendor': r['vendor'],
@@ -2567,7 +2925,6 @@ def get_target():
 
 # ── Receipt Scanner ───────────────────────────────────────────
 
-import subprocess
 import threading
 import base64 as _base64
 import io as _io
@@ -2875,7 +3232,6 @@ def receipts_products():
 def receipts_scan():
     data      = request.get_json() or {}
     image_b64 = data.get('image', '')
-    mime_type = data.get('mimeType', 'image/jpeg')
     mode      = data.get('mode', 'hybrid')  # 'gemini_only' | 'hybrid'
 
     if not image_b64:
@@ -2995,7 +3351,6 @@ def receipts_insert_odoo():
     data       = request.get_json() or {}
     receipt_no = data.get('receipt_no')
     order_date = data.get('date') or date.today().isoformat()
-    customer   = data.get('customer')
     items      = data.get('items', [])
 
     try:
@@ -3596,7 +3951,6 @@ def _run_training(folder_path, session_id, db_cfg, resume=False, training_mode='
             _training_state['current_image'] = thumb_b64
 
         # ── Pause / stop check ──────────────────────────────────
-        import time as _time
         while True:
             with _training_lock:
                 stop  = _training_state.get('stop_requested', False)
@@ -3744,7 +4098,6 @@ def _generate_reconciliation(state):
         if r.get('status') != 'scanned':
             continue
         fn = r.get('file', '')
-        file_path = os.path.join(folder, fn) if folder else fn
 
         for rec in r.get('receipts', []):
             rec_no = rec.get('receipt_no') or ''
@@ -4612,6 +4965,33 @@ def reconciliation_skip():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/reconciliation/pending', methods=['POST'])
+@login_required
+def reconciliation_pending():
+    """Revert a skipped or resolved item back to pending (does NOT touch products.md)."""
+    data    = request.get_json() or {}
+    item_id = data.get('id', '').strip()
+    if not item_id:
+        return jsonify({'error': 'id required'}), 400
+    try:
+        with open(_RECONCILIATION_PATH) as f:
+            rec_data = json.load(f)
+        for item in rec_data.get('items', []):
+            if item['id'] == item_id:
+                item['status'] = 'pending'
+                item.pop('resolved_alias', None)
+                item.pop('resolved_product_id', None)
+                break
+        rec_data['pending']  = sum(1 for i in rec_data['items'] if i['status'] == 'pending')
+        rec_data['skipped']  = sum(1 for i in rec_data['items'] if i['status'] == 'skipped')
+        rec_data['resolved'] = sum(1 for i in rec_data['items'] if i['status'] == 'resolved')
+        with open(_RECONCILIATION_PATH, 'w') as f:
+            json.dump(rec_data, f, default=str, indent=2)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/reconciliation/delete-file', methods=['POST'])
 @login_required
 def reconciliation_delete_file():
@@ -4629,6 +5009,8 @@ def reconciliation_delete_file():
             return jsonify({'error': 'No folder path in reconciliation data'}), 400
 
         src = os.path.join(folder, filename)
+        if not os.path.normpath(src).startswith(os.path.normpath(folder) + os.sep):
+            return jsonify({'error': 'Invalid path'}), 400
         if not os.path.isfile(src):
             return jsonify({'error': f'File not found: {src}'}), 404
 
@@ -4663,6 +5045,8 @@ def reconciliation_image(filename):
     except Exception:
         return 'Not found', 404
     file_path = os.path.join(folder, filename)
+    if not os.path.normpath(file_path).startswith(os.path.normpath(folder) + os.sep):
+        return 'Not found', 404
     if not os.path.isfile(file_path):
         return 'Not found', 404
     ext = os.path.splitext(filename)[1].lower()

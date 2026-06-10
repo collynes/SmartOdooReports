@@ -86,8 +86,8 @@
 .btn-train:hover { background:#047857; }
 .btn-train:disabled { background:#6ee7b7; cursor:not-allowed; }
 
-.empty-state { text-align:center; padding:60px 20px; color:#94a3b8; }
-.empty-state svg { opacity:.3; margin-bottom:12px; }
+.recon-empty { text-align:center; padding:60px 20px; color:#94a3b8; }
+.recon-empty svg { opacity:.3; margin-bottom:12px; }
 .empty-icon  { font-size:48px; margin-bottom:12px; }
 
 .toast { position:fixed; bottom:80px; right:20px; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; color:#fff; z-index:9998; opacity:0; transition:opacity .3s; pointer-events:none; }
@@ -128,7 +128,7 @@
 
   <!-- Item list -->
   <div class="recon-list" id="recon-list">
-    <div class="empty-state"><div class="empty-icon">📋</div><div>Loading reconciliation data…</div></div>
+    <div class="recon-empty"><div class="empty-icon">📋</div><div>Loading reconciliation data…</div></div>
   </div>
 
   <!-- Bottom action bar -->
@@ -200,7 +200,7 @@ async function loadData() {
       d.session_id ? `Session: ${d.session_id} · Generated: ${(d.generated_at||'').slice(0,16).replace('T',' ')} · Folder: ${d.folder_path}` : '';
   } catch(e) {
     document.getElementById('recon-list').innerHTML =
-      '<div class="empty-state"><div>Failed to load data. Run a training first.</div></div>';
+      '<div class="recon-empty"><div>Failed to load data. Run a training first.</div></div>';
   }
 }
 
@@ -239,7 +239,7 @@ function renderList() {
 
   if (!visible.length) {
     document.getElementById('recon-list').innerHTML =
-      `<div class="empty-state"><div class="empty-icon">${curFilter==='pending'?'✅':'📋'}</div>
+      `<div class="recon-empty"><div class="empty-icon">${curFilter==='pending'?'✅':'📋'}</div>
        <div>${curFilter==='pending' ? 'No pending items!' : 'Nothing here yet.'}</div></div>`;
     return;
   }
@@ -391,7 +391,7 @@ async function skip(id) {
 
 async function undoResolve(id) {
   try {
-    await fetch('/api/reconciliation/skip', {
+    await fetch('/api/reconciliation/pending', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({id})
     });
@@ -403,10 +403,16 @@ async function undoResolve(id) {
 }
 
 async function undoSkip(id) {
-  const item = allItems.find(i => i.id === id);
-  if (item) item.status = 'pending';
-  updateStats({items: allItems});
-  renderList();
+  try {
+    await fetch('/api/reconciliation/pending', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id})
+    });
+    const item = allItems.find(i => i.id === id);
+    if (item) item.status = 'pending';
+    updateStats({items: allItems});
+    renderList();
+  } catch(e) { showToast('Error', 'err'); }
 }
 
 // ── Image preview & delete ──────────────────────────────────────

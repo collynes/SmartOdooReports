@@ -15,8 +15,6 @@ import sys
 import json
 import base64
 import re
-import tempfile
-import os
 
 def main():
     try:
@@ -56,7 +54,7 @@ def main():
     # Run OCR
     try:
         raw_text = pytesseract.image_to_string(processed, config="--oem 3 --psm 6")
-    except Exception as e:
+    except Exception:
         # Fallback to original image
         try:
             raw_text = pytesseract.image_to_string(img, config="--oem 3 --psm 6")

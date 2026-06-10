@@ -72,7 +72,7 @@ def get_projections(db_config, horizon_days=30):
                    ROUND(SUM(so.amount_total)::numeric, 0) AS revenue,
                    COUNT(DISTINCT so.id) AS orders
             FROM sale_order so
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND so.date_order >= CURRENT_DATE - 90
               AND so.date_order < CURRENT_DATE
             GROUP BY 1 ORDER BY 1
@@ -151,7 +151,7 @@ def get_projections(db_config, horizon_days=30):
                 JOIN sale_order so       ON so.id  = sol.order_id
                 JOIN product_product pp  ON pp.id  = sol.product_id
                 JOIN product_template pt ON pt.id  = pp.product_tmpl_id
-                WHERE so.state NOT IN ('cancel','draft')
+                WHERE so.state IN ('sale','done')
                   AND sol.display_type IS NULL
                   AND so.date_order >= CURRENT_DATE - 30
                 GROUP BY pt.name->>'en_US', sol.product_id
@@ -199,8 +199,8 @@ def get_projections(db_config, horizon_days=30):
             strength  = abs(r['slope'])
             conf      = "strong" if r['r2'] > 0.6 else "moderate" if r['r2'] > 0.3 else "weak"
             summaries.append({
-                'text': f"Revenue is projected to {direction} by KSH {strength:,.0f}/day over the next {horizon_days} days.",
-                'sub': f"Model confidence: {conf} (R² = {r['r2']}). Projected total: KSH {r['total_proj']:,}.",
+                'text': f"Revenue is projected to {direction} by KES {strength:,.0f}/day over the next {horizon_days} days.",
+                'sub': f"Model confidence: {conf} (R² = {r['r2']}). Projected total: KES {r['total_proj']:,}.",
                 'type': 'positive' if r['slope'] >= 0 else 'warning',
             })
 

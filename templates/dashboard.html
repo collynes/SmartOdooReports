@@ -94,9 +94,9 @@
     margin-bottom: 5px;
   }
   .hero-kpi-val {
-    font-size: 24px;
-    font-weight: 800;
-    letter-spacing: -.5px;
+    font-size: 26px;
+    font-weight: 900;
+    letter-spacing: -.6px;
     line-height: 1;
     margin-bottom: 6px;
   }
@@ -129,9 +129,6 @@
     background: rgba(255,255,255,.85);
     transition: width .6s ease;
   }
-  /* Section card headings */
-  .section-title { font-size: 15px; font-weight: 700; color: var(--pdd); }
-  .section-sub   { font-size: 12.5px; color: #9ca3af; }
   /* Bottom row 2-col grid */
   .dash-bottom-row {
     display: grid;
@@ -247,7 +244,7 @@
     <div style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
         <span style="font-size:12.5px;color:#374151;font-weight:500;">{{ r.product[:26] }}{% if r.product|length > 26 %}…{% endif %}</span>
-        <span style="font-size:12px;color:var(--p);font-weight:600;">KSH {{ '{:,.0f}'.format(r.revenue|float) }}</span>
+        <span style="font-size:12px;color:var(--p);font-weight:600;">KES {{ '{:,.0f}'.format(r.revenue|float) }}</span>
       </div>
       <div style="background:#f3f4f6;border-radius:3px;height:4px;">
         <div style="background:var(--p);border-radius:3px;height:4px;width:{{ ((r.revenue|float / max_rev) * 100)|round }}%;transition:width .4s;"></div>
@@ -255,7 +252,11 @@
     </div>
     {% endfor %}
     {% else %}
-    <p style="color:#9ca3af;font-size:13px;">No sales data for this period.</p>
+    <div class="empty-state">
+      <div class="es-icon">📊</div>
+      <div class="es-title">No sales yet</div>
+      <div class="es-sub">No sales data for this period.</div>
+    </div>
     {% endif %}
     </div>
     <!-- Donut chart view -->
@@ -304,9 +305,9 @@
       </div>
       <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#9ca3af;flex-shrink:0;">
         <span>Less</span>
-        <div style="width:10px;height:10px;border-radius:2px;background:#f0e8f0;"></div>
-        <div style="width:10px;height:10px;border-radius:2px;background:#d4adce;"></div>
-        <div style="width:10px;height:10px;border-radius:2px;background:#b07aab;"></div>
+        <div style="width:10px;height:10px;border-radius:2px;background:var(--p);opacity:.12;"></div>
+        <div style="width:10px;height:10px;border-radius:2px;background:var(--p);opacity:.35;"></div>
+        <div style="width:10px;height:10px;border-radius:2px;background:var(--p);opacity:.65;"></div>
         <div style="width:10px;height:10px;border-radius:2px;background:var(--p);"></div>
         <div style="width:10px;height:10px;border-radius:2px;background:var(--pd);"></div>
         <span>More</span>
@@ -345,10 +346,10 @@ fetch('/api/revenue-trend?period={{ filter_period }}{% if filter_period == "cust
         }]
       },
       options: {
-        plugins: { legend:{display:false}, tooltip:{callbacks:{label:c=>'KSH '+c.parsed.y.toLocaleString()}}},
+        plugins: { legend:{display:false}, tooltip:{callbacks:{label:c=>'KES '+c.parsed.y.toLocaleString()}}},
         scales: {
           x:{type:'category',ticks:{color:'#9ca3af',font:{size:11},maxTicksLimit:10},grid:{color:'#f3f4f6'}},
-          y:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}
+          y:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KES '+v.toLocaleString()},grid:{color:'#f3f4f6'}}
         }
       }
     });
@@ -377,7 +378,7 @@ const top5Data = {{ top5 | tojson }};
 let trendRevChart = null, trendOrdChart = null, trendBothRevChart = null, trendBothOrdChart = null;
 let trendData = [];
 let showPrevMonth = true;
-const PREV_COLOR = 'rgba(180,130,170,0.75)';
+const PREV_COLOR = THEME.alpha(.45);
 const PREV_DASH  = [6, 4];
 
 const _trendUrl    = '/api/revenue-trend?period={{ filter_period }}{% if filter_period == "custom" %}&from={{ filter_from }}&to={{ filter_to }}{% endif %}';
@@ -418,11 +419,11 @@ Promise.all([fetch(_trendUrl).then(r=>r.json()), fetch(_prevMoUrl).then(r=>r.jso
     const trendOpts = (sz) => ({
       plugins:{
         legend:{display:true, labels:{filter:i=>i.text==='Prev Month'?showPrevMonth:true, color:'#6b7280', font:{size:10}, boxWidth:20}},
-        tooltip:{callbacks:{label:c=>c.dataset.label+': KSH '+c.parsed.y.toLocaleString()}}
+        tooltip:{callbacks:{label:c=>c.dataset.label+': KES '+c.parsed.y.toLocaleString()}}
       },
       scales:{
         x:{type:'category',ticks:{color:'#9ca3af',font:{size:sz},maxTicksLimit:12},grid:{display:false}},
-        y:{ticks:{color:'#9ca3af',font:{size:sz},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}}
+        y:{ticks:{color:'#9ca3af',font:{size:sz},callback:v=>'KES '+v.toLocaleString()},grid:{color:'#f3f4f6'}}
       }
     });
     const ordOpts = (sz) => ({
@@ -446,7 +447,7 @@ Promise.all([fetch(_trendUrl).then(r=>r.json()), fetch(_prevMoUrl).then(r=>r.jso
     trendOrdChart = new Chart(document.getElementById('trendOrdChart').getContext('2d'), {
       type:'line',
       data:{labels, datasets:[
-        {label:'Orders', data:ords, borderColor:'#714b67', backgroundColor:'rgba(113,75,103,.07)', fill:true, tension:0.35, pointRadius:ptR, borderWidth:2},
+        {label:'Orders', data:ords, borderColor:THEME.pd(), backgroundColor:THEME.alpha(.07), fill:true, tension:0.35, pointRadius:ptR, borderWidth:2},
         prevOrdDataset
       ]},
       options: ordOpts(10)
@@ -462,7 +463,7 @@ Promise.all([fetch(_trendUrl).then(r=>r.json()), fetch(_prevMoUrl).then(r=>r.jso
     trendBothOrdChart = new Chart(document.getElementById('trendBothOrdChart').getContext('2d'), {
       type:'line',
       data:{labels, datasets:[
-        {label:'Orders', data:ords, borderColor:'#714b67', backgroundColor:'rgba(113,75,103,.07)', fill:true, tension:0.35, pointRadius:ptR, borderWidth:2},
+        {label:'Orders', data:ords, borderColor:THEME.pd(), backgroundColor:THEME.alpha(.07), fill:true, tension:0.35, pointRadius:ptR, borderWidth:2},
         {...prevOrdDataset}
       ]},
       options: ordOpts(9)
@@ -503,7 +504,7 @@ function setTPView(mode) {
         cutout:'58%',
         plugins:{
           legend:{position:'bottom',labels:{font:{size:10},padding:6,color:'#6b7280'}},
-          tooltip:{callbacks:{label:c=>'KSH '+c.parsed.toLocaleString()}}
+          tooltip:{callbacks:{label:c=>'KES '+c.parsed.toLocaleString()}}
         }
       }
     });
@@ -525,12 +526,12 @@ function setTPView(mode) {
       data.forEach(function(d) { map[d.day] = d.total; if (d.total > maxVal) maxVal = d.total; });
 
       function heatColor(v) {
-        if (v <= 0) return '#f0e8f0';
+        if (v <= 0) return THEME.alpha(.08);
         var i = v / maxVal;
-        if (i < 0.15) return '#e8d5e8';
-        if (i < 0.3)  return '#d4adce';
-        if (i < 0.5)  return '#b07aab';
-        if (i < 0.7)  return '#9a6090';
+        if (i < 0.15) return THEME.alpha(.18);
+        if (i < 0.3)  return THEME.alpha(.35);
+        if (i < 0.5)  return THEME.alpha(.55);
+        if (i < 0.7)  return THEME.alpha(.75);
         if (i < 0.85) return THEME.p();
         return THEME.pd();
       }

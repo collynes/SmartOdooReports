@@ -9,7 +9,6 @@ and a severity (low / medium / high).
 import psycopg2
 import psycopg2.extras
 import numpy as np
-from datetime import date, timedelta
 
 
 def _q(conn, sql, params=None):
@@ -50,7 +49,7 @@ def detect_anomalies(db_config, lookback_days=90):
                    ROUND(SUM(so.amount_total)::numeric, 0) AS revenue,
                    COUNT(so.id) AS orders
             FROM sale_order so
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND so.date_order >= CURRENT_DATE - %s
             GROUP BY 1 ORDER BY 1
         """, (lookback_days,))
@@ -65,7 +64,7 @@ def detect_anomalies(db_config, lookback_days=90):
                     anomalies.append({
                         'category': 'Revenue',
                         'title': f"Unusual revenue drop on {row['day']}",
-                        'detail': f"KSH {row['revenue']:,} revenue ({row['orders']} orders) — {abs(z):.1f}× std dev below mean. May indicate a slow day or missed sales.",
+                        'detail': f"KES {row['revenue']:,} revenue ({row['orders']} orders) — {abs(z):.1f}× std dev below mean. May indicate a slow day or missed sales.",
                         'probability': prob,
                         'severity': 'high' if prob >= 80 else 'medium',
                         'date': str(row['day']),
@@ -85,7 +84,7 @@ def detect_anomalies(db_config, lookback_days=90):
             JOIN sale_order so       ON so.id = sol.order_id
             JOIN product_product pp  ON pp.id = sol.product_id
             JOIN product_template pt ON pt.id = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND sol.display_type IS NULL
               AND sol.price_unit > 0
               AND so.date_order >= CURRENT_DATE - %s
@@ -104,8 +103,8 @@ def detect_anomalies(db_config, lookback_days=90):
                 anomalies.append({
                     'category': 'Pricing',
                     'title': f"Price inconsistency — {r['product']}",
-                    'detail': (f"Sold at prices ranging from KSH {float(r['min_price']):,.0f} to "
-                               f"KSH {float(r['max_price']):,.0f} (avg KSH {float(r['avg_price']):,.0f}). "
+                    'detail': (f"Sold at prices ranging from KES {float(r['min_price']):,.0f} to "
+                               f"KES {float(r['max_price']):,.0f} (avg KES {float(r['avg_price']):,.0f}). "
                                f"Max is {ratio:.1f}× the minimum."),
                     'probability': prob,
                     'severity': 'high' if ratio > 3 else 'medium',
@@ -125,7 +124,7 @@ def detect_anomalies(db_config, lookback_days=90):
             JOIN sale_order so       ON so.id = sol.order_id
             JOIN product_product pp  ON pp.id = sol.product_id
             JOIN product_template pt ON pt.id = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND sol.display_type IS NULL
               AND COALESCE((pp.standard_price->>'1')::numeric, 0) > 0
               AND sol.price_unit < COALESCE((pp.standard_price->>'1')::numeric, 0)
@@ -141,8 +140,8 @@ def detect_anomalies(db_config, lookback_days=90):
             anomalies.append({
                 'category': 'Margin',
                 'title': f"Sold below cost — {r['product']}",
-                'detail': (f"Cost: KSH {float(r['cost']):,.0f}. "
-                           f"Minimum sale price: KSH {float(r['min_sold_price']):,.0f}. "
+                'detail': (f"Cost: KES {float(r['cost']):,.0f}. "
+                           f"Minimum sale price: KES {float(r['min_sold_price']):,.0f}. "
                            f"{r['occurrences']} occurrence(s). Selling at a loss."),
                 'probability': prob,
                 'severity': 'high',
@@ -159,7 +158,7 @@ def detect_anomalies(db_config, lookback_days=90):
                        MAX(so.date_order)::date AS last_order
                 FROM sale_order so
                 JOIN res_partner rp ON rp.id = so.partner_id
-                WHERE so.state NOT IN ('cancel','draft')
+                WHERE so.state IN ('sale','done')
                   AND so.date_order >= CURRENT_DATE - %s
                   AND so.date_order <  CURRENT_DATE - 30
                 GROUP BY so.partner_id, rp.name
@@ -169,7 +168,7 @@ def detect_anomalies(db_config, lookback_days=90):
             recent AS (
                 SELECT so.partner_id, SUM(so.amount_total) AS recent_rev
                 FROM sale_order so
-                WHERE so.state NOT IN ('cancel','draft')
+                WHERE so.state IN ('sale','done')
                   AND so.date_order >= CURRENT_DATE - 30
                 GROUP BY so.partner_id
             )
@@ -189,8 +188,8 @@ def detect_anomalies(db_config, lookback_days=90):
             anomalies.append({
                 'category': 'Customer',
                 'title': f"Top customer gone quiet — {r['customer']}",
-                'detail': (f"Spent KSH {float(r['past_rev']):,.0f} in prior period, "
-                           f"only KSH {float(r['recent_rev']):,.0f} in last 30 days. "
+                'detail': (f"Spent KES {float(r['past_rev']):,.0f} in prior period, "
+                           f"only KES {float(r['recent_rev']):,.0f} in last 30 days. "
                            f"Last order was {days} days ago."),
                 'probability': min(prob, 90),
                 'severity': 'medium',
@@ -202,7 +201,7 @@ def detect_anomalies(db_config, lookback_days=90):
         cancels = _q(conn, """
             SELECT
                 COUNT(*) FILTER (WHERE state = 'cancel') AS cancelled,
-                COUNT(*) FILTER (WHERE state NOT IN ('cancel','draft')) AS confirmed,
+                COUNT(*) FILTER (WHERE state IN ('sale','done')) AS confirmed,
                 rp.name AS customer
             FROM sale_order so
             JOIN res_partner rp ON rp.id = so.partner_id
@@ -266,7 +265,7 @@ def detect_anomalies(db_config, lookback_days=90):
             FROM sale_order_line sol
             JOIN sale_order so ON so.id = sol.order_id
             JOIN res_partner rp ON rp.id = so.partner_id
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND sol.display_type IS NULL
               AND sol.price_unit > 0
               AND so.date_order >= CURRENT_DATE - %s
@@ -284,8 +283,8 @@ def detect_anomalies(db_config, lookback_days=90):
             anomalies.append({
                 'category': 'Discounts',
                 'title': f"{disc:.0f}% discount on order {r['order_ref']}",
-                'detail': (f"Customer: {r['customer']}. List value KSH {float(r['list_value']):,.0f} → "
-                           f"sold for KSH {float(r['subtotal']):,.0f} on {r['day']}."),
+                'detail': (f"Customer: {r['customer']}. List value KES {float(r['list_value']):,.0f} → "
+                           f"sold for KES {float(r['subtotal']):,.0f} on {r['day']}."),
                 'probability': prob,
                 'severity': 'high' if disc > 40 else 'medium',
                 'date': str(r['day']),

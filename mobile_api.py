@@ -4,14 +4,13 @@ FastAPI + Swagger UI  →  http://localhost:8800/docs
 Auth: POST /auth/login  →  Bearer <token>
 """
 
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import psycopg2
 import psycopg2.extras
-import httpx
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv

@@ -2,6 +2,10 @@
 
 A practical handbook for running the webapp day-to-day. For dev/architecture details see `CLAUDE.md`.
 
+For how the PartyWorld agent should work with Collins on this project, see `USER_PROFILE.md`.
+
+For full operational context, server details, people, expense rules, Odoo IDs, and scanner internals, see `AGENT_REFERENCE.md`.
+
 ---
 
 ## 1. Quick Start

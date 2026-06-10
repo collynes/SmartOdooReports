@@ -21,9 +21,9 @@ def _q(conn, sql, params=None):
 
 
 def fmt(n):
-    """Format number as KSH with commas."""
+    """Format number as KES with commas."""
     try:
-        return f"KSH {float(n):,.0f}"
+        return f"KES {float(n):,.0f}"
     except Exception:
         return str(n)
 
@@ -64,7 +64,7 @@ def generate_insights(db_config, limit=5):
             JOIN sale_order so       ON so.id = sol.order_id
             JOIN product_product pp  ON pp.id = sol.product_id
             JOIN product_template pt ON pt.id = pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
             GROUP BY 1
             HAVING SUM(CASE WHEN so.date_order >= date_trunc('month', CURRENT_DATE)
@@ -107,7 +107,7 @@ def generate_insights(db_config, limit=5):
                          THEN so.amount_total ELSE 0 END) AS prev,
                 EXTRACT(day FROM CURRENT_DATE)::int AS days_in
             FROM sale_order so
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND so.date_order >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
         """)
         if rev_row:
@@ -137,7 +137,7 @@ def generate_insights(db_config, limit=5):
                 SELECT SUM(sol.price_subtotal) AS t
                 FROM sale_order_line sol
                 JOIN sale_order so ON so.id = sol.order_id
-                WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+                WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
                   AND so.date_order >= date_trunc('month', CURRENT_DATE)
             ),
             by_product AS (
@@ -146,7 +146,7 @@ def generate_insights(db_config, limit=5):
                 JOIN sale_order so       ON so.id = sol.order_id
                 JOIN product_product pp  ON pp.id = sol.product_id
                 JOIN product_template pt ON pt.id = pp.product_tmpl_id
-                WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+                WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
                   AND so.date_order >= date_trunc('month', CURRENT_DATE)
                 GROUP BY 1
                 ORDER BY rev DESC LIMIT 1
@@ -170,7 +170,7 @@ def generate_insights(db_config, limit=5):
                        SUM(sol.product_uom_qty) / 30.0 AS daily_qty
                 FROM sale_order_line sol
                 JOIN sale_order so ON so.id = sol.order_id
-                WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+                WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
                   AND so.date_order >= CURRENT_DATE - 30
                 GROUP BY sol.product_id
             ),
@@ -211,7 +211,7 @@ def generate_insights(db_config, limit=5):
                    ROUND(SUM(so.amount_total)::numeric, 0) AS revenue
             FROM sale_order so
             JOIN res_partner rp ON rp.id = so.partner_id
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND so.date_order >= date_trunc('month', CURRENT_DATE)
             GROUP BY rp.name
             ORDER BY revenue DESC LIMIT 1
@@ -234,7 +234,7 @@ def generate_insights(db_config, limit=5):
                 JOIN sale_order so       ON so.id = sol.order_id
                 JOIN product_product pp  ON pp.id = sol.product_id
                 JOIN product_template pt ON pt.id = pp.product_tmpl_id
-                WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+                WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
                   AND so.date_order >= CURRENT_DATE - 60
                   AND so.date_order <  CURRENT_DATE - 7
                 GROUP BY 1 HAVING COUNT(so.id) >= 5
@@ -245,7 +245,7 @@ def generate_insights(db_config, limit=5):
                 JOIN sale_order so       ON so.id = sol.order_id
                 JOIN product_product pp  ON pp.id = sol.product_id
                 JOIN product_template pt ON pt.id = pp.product_tmpl_id
-                WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+                WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
                   AND so.date_order >= CURRENT_DATE - 7
                 GROUP BY 1
             )
@@ -277,7 +277,7 @@ def generate_insights(db_config, limit=5):
                          AND so.date_order::date <= (CURRENT_DATE - INTERVAL '1 year')::date
                          THEN so.amount_total ELSE 0 END) AS last_year
             FROM sale_order so
-            WHERE so.state NOT IN ('cancel','draft')
+            WHERE so.state IN ('sale','done')
               AND EXTRACT(year FROM so.date_order) >= EXTRACT(year FROM CURRENT_DATE) - 1
         """)
         if ytd:
@@ -303,7 +303,7 @@ def generate_insights(db_config, limit=5):
                 SELECT sol.product_id, MAX(so.date_order) AS last_sale
                 FROM sale_order_line sol
                 JOIN sale_order so ON so.id = sol.order_id
-                WHERE so.state NOT IN ('cancel','draft')
+                WHERE so.state IN ('sale','done')
                 GROUP BY sol.product_id
             ) ls ON ls.product_id = pp.id
             WHERE sl.usage = 'internal' AND sq.quantity > 0
@@ -339,7 +339,6 @@ def get_daily_insight(db_config):
         return None
 
     # Deterministic daily rotation: use day-of-year mod number of candidates
-    from datetime import date
     day_seed = date.today().timetuple().tm_yday
     idx = day_seed % len(candidates)
     return candidates[idx]

@@ -3,8 +3,17 @@
 
 {% block content %}
 <style>
-  .stat-value { font-size:1.5rem;font-weight:700;line-height:1.2; }
-  .stat-sub   { font-size:0.78rem;color:#9ca3af;margin-top:4px; }
+  .stat-value { font-size:1.7rem;font-weight:800;line-height:1.2;letter-spacing:-.3px; }
+  .stat-sub   { font-size:0.78rem;color:#9ca3af;margin-top:5px; }
+  .anal-hero {
+    background: linear-gradient(135deg, var(--pdd) 0%, var(--p) 50%, var(--pbdr) 100%);
+    border-radius: 16px;
+    padding: 26px 30px;
+    margin-bottom: 20px;
+    color: #fff;
+  }
+  .anal-hero h1 { font-size:26px;font-weight:800;margin:0;letter-spacing:-.4px; }
+  .anal-hero p  { font-size:13.5px;margin:5px 0 0;color:rgba(255,255,255,.75); }
   .kpi-accent { width:4px;border-radius:2px;flex-shrink:0;min-height:46px; }
 
   .ct-wrap  { display:flex;border:1.5px solid #e5e7eb;border-radius:6px;overflow:hidden; }
@@ -13,9 +22,8 @@
   .ct-btn:hover  { background:#f5f0f4;color:var(--p); }
   .ct-btn.active { background:var(--p);color:#fff; }
 
-  .anal-kpi-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:24px; }
+  .anal-kpi-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:28px; }
   @media(min-width:768px)  { .anal-kpi-grid { grid-template-columns:repeat(3,1fr); } }
-  @media(min-width:1100px) { .anal-kpi-grid { grid-template-columns:repeat(6,1fr); } }
 
   .chart-grid-2 { display:grid;grid-template-columns:1fr;gap:18px;margin-bottom:18px; }
   @media(min-width:900px) { .chart-grid-2 { grid-template-columns:1.6fr 1fr; } }
@@ -69,10 +77,10 @@
   .card-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin-bottom:6px; }
 </style>
 
-<!-- Page header -->
-<div style="margin-bottom:20px;">
-  <h1 style="font-size:24px;font-weight:800;color:#1f2937;margin:0;letter-spacing:-.3px;">P&amp;L Dashboard</h1>
-  <p style="font-size:14px;color:#9ca3af;margin:4px 0 0;font-weight:400;">Revenue, costs and profit — full business overview</p>
+<!-- Page header — hero strip, same family as Business Profile -->
+<div class="anal-hero">
+  <h1>P&amp;L Dashboard</h1>
+  <p>Revenue, costs and profit — full business overview</p>
 </div>
 
 <!-- Toolbar: tabs + year filter -->

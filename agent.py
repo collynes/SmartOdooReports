@@ -24,7 +24,7 @@ SYSTEM_PROMPT = """You are a smart data analyst for **Party World**, a party sup
 
 ## Database (PostgreSQL / Odoo 18)
 Key tables you can query:
-- **sale_order** (so): id, name, state, date_order, amount_total, partner_id — state NOT IN ('cancel','draft') for confirmed orders
+- **sale_order** (so): id, name, state, date_order, amount_total, partner_id — state IN ('sale','done') for confirmed orders
 - **sale_order_line** (sol): order_id, product_id, product_uom_qty, price_unit, price_subtotal, display_type (filter display_type IS NULL for real lines)
 - **account_move** (am): id, move_type, state, invoice_date, amount_untaxed, amount_total, partner_id — move_type IN ('out_invoice','out_receipt') for sales, 'in_invoice' for vendor bills; state='posted' for confirmed
 - **account_move_line** (aml): move_id, account_id, product_id, quantity, price_unit, price_subtotal, display_type, debit, credit

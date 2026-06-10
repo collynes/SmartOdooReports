@@ -36,18 +36,18 @@
   {% set total_all = total_manual + total_odoo %}
   <div style="background:linear-gradient(135deg,#dc2626,#991b1b);border-radius:12px;padding:16px 18px;color:#fff;">
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Total Expenses</div>
-    <div style="font-size:22px;font-weight:800;line-height:1;">KSH {{ '{:,.0f}'.format(total_all|float) }}</div>
+    <div style="font-size:22px;font-weight:800;line-height:1;">KES {{ '{:,.0f}'.format(total_all|float) }}</div>
     <div style="font-size:11px;opacity:.6;margin-top:3px;">{{ filter_label }}</div>
   </div>
   <div style="background:linear-gradient(135deg,var(--p),var(--pd));border-radius:12px;padding:16px 18px;color:#fff;">
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Manual Entries</div>
     <div style="font-size:22px;font-weight:800;line-height:1;" data-count-up="{{ manual|length if manual else 0 }}">{{ manual|length if manual else 0 }}</div>
-    <div style="font-size:11px;opacity:.6;margin-top:3px;">KSH {{ '{:,.0f}'.format(total_manual|float) }}</div>
+    <div style="font-size:11px;opacity:.6;margin-top:3px;">KES {{ '{:,.0f}'.format(total_manual|float) }}</div>
   </div>
   <div style="background:linear-gradient(135deg,#017E84,#015060);border-radius:12px;padding:16px 18px;color:#fff;">
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:4px;">Odoo Bills</div>
     <div style="font-size:22px;font-weight:800;line-height:1;" data-count-up="{{ odoo_bills|length if odoo_bills else 0 }}">{{ odoo_bills|length if odoo_bills else 0 }}</div>
-    <div style="font-size:11px;opacity:.6;margin-top:3px;">KSH {{ '{:,.0f}'.format(total_odoo|float) }}</div>
+    <div style="font-size:11px;opacity:.6;margin-top:3px;">KES {{ '{:,.0f}'.format(total_odoo|float) }}</div>
   </div>
   {% if smart_tiles %}
   <div style="background:linear-gradient(135deg,#d97706,#b45309);border-radius:12px;padding:16px 18px;color:#fff;">
@@ -83,11 +83,11 @@
         </div>
         <div>
           <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Per Entry</div>
-          <div style="font-size:16px;font-weight:700;color:#374151;">KSH {{ '{:,.0f}'.format(tile.amount) }}</div>
+          <div style="font-size:16px;font-weight:700;color:#374151;">KES {{ '{:,.0f}'.format(tile.amount) }}</div>
         </div>
         <div>
           <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Total Due</div>
-          <div style="font-size:16px;font-weight:700;color:#111827;">KSH {{ '{:,.0f}'.format(tile.total_amount) }}</div>
+          <div style="font-size:16px;font-weight:700;color:#111827;">KES {{ '{:,.0f}'.format(tile.total_amount) }}</div>
         </div>
       </div>
       <div style="margin-bottom:12px;">
@@ -112,7 +112,7 @@
           style="width:100%;background:{{ tile.color }};color:#fff;border:none;border-radius:7px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"
           onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          Add All {{ tile.missing_count }} Missing (KSH {{ '{:,.0f}'.format(tile.total_amount) }})
+          Add All {{ tile.missing_count }} Missing (KES {{ '{:,.0f}'.format(tile.total_amount) }})
         </button>
       </form>
     </div>
@@ -137,7 +137,7 @@
       <div>
         <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
           <span style="color:#374151;font-weight:600;">{{ c.category }}</span>
-          <span style="color:var(--p);font-weight:700;">KSH {{ '{:,.0f}'.format(c.total|float) }}
+          <span style="color:var(--p);font-weight:700;">KES {{ '{:,.0f}'.format(c.total|float) }}
             <span style="color:#9ca3af;font-weight:400;font-size:11px;">({{ c.cnt }}×)</span>
           </span>
         </div>
@@ -200,7 +200,7 @@
           <td style="font-weight:500;">{{ e.category }}</td>
           <td style="color:#374151;">{{ e.description or '—' }}</td>
           <td style="color:#6b7280;">{{ e.vendor or '—' }}</td>
-          <td class="r" style="color:#dc2626;font-weight:600;">KSH {{ '{:,.0f}'.format(e.amount|float) }}</td>
+          <td class="r" style="color:#dc2626;font-weight:600;">KES {{ '{:,.0f}'.format(e.amount|float) }}</td>
           <td class="c">
             <span style="background:#f3f4f6;color:#6b7280;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">{{ e.frequency | title }}</span>
           </td>
@@ -249,7 +249,7 @@
           <td style="font-family:monospace;font-size:12px;color:#6b7280;">{{ b.ref }}</td>
           <td style="color:#6b7280;">{{ b.expense_date or '—' }}</td>
           <td style="font-weight:500;">{{ b.vendor }}</td>
-          <td class="r" style="color:#dc2626;font-weight:600;">KSH {{ '{:,.0f}'.format(b.amount|float) }}</td>
+          <td class="r" style="color:#dc2626;font-weight:600;">KES {{ '{:,.0f}'.format(b.amount|float) }}</td>
           <td class="c">
             {% if b.payment_state == 'paid' %}<span class="badge-ok">Paid</span>
             {% elif b.payment_state == 'partial' %}<span class="badge-warn">Partial</span>
@@ -293,7 +293,7 @@
             onfocus="this.style.borderColor='var(--p)'" onblur="this.style.borderColor='#d1d5db'" required>
         </div>
         <div>
-          <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Amount (KSH) *</label>
+          <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Amount (KES) *</label>
           <input type="number" name="amount" id="field-amount" step="0.01" min="0"
             style="width:100%;border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;outline:none;"
             onfocus="this.style.borderColor='var(--p)'" onblur="this.style.borderColor='#d1d5db'" required>

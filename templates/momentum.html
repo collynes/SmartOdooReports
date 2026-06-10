@@ -37,8 +37,8 @@
         {% for r in rows %}
         <tr>
           <td style="font-weight:500;color:#111827;">{{ r.product }}</td>
-          <td class="r" style="color:#9ca3af;">KSH {{ '{:,.0f}'.format(r.prev_rev|float) }}</td>
-          <td class="r" style="font-weight:600;">KSH {{ '{:,.0f}'.format(r.curr_rev|float) }}</td>
+          <td class="r" style="color:#9ca3af;">KES {{ '{:,.0f}'.format(r.prev_rev|float) }}</td>
+          <td class="r" style="font-weight:600;">KES {{ '{:,.0f}'.format(r.curr_rev|float) }}</td>
           <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.rev_chg }}%</td>
           <td class="r" style="color:#059669;font-family:monospace;font-weight:600;">+{{ r.qty_chg }}%</td>
           <td class="r">
@@ -96,9 +96,9 @@ function buildCharts() {
     },
     options: {
       indexAxis:'y',
-      plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KSH '+c.parsed.x.toLocaleString()}}},
+      plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b7280'}},tooltip:{callbacks:{label:c=>'KES '+c.parsed.x.toLocaleString()}}},
       scales:{
-        x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KSH '+v.toLocaleString()},grid:{color:'#f3f4f6'}},
+        x:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>'KES '+v.toLocaleString()},grid:{color:'#f3f4f6'}},
         y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
       }
     }

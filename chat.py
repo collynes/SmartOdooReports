@@ -2,7 +2,6 @@
 Natural language chat interface for Odoo sales data.
 Uses keyword/intent matching to route questions to live DB queries.
 """
-import re
 from datetime import date, timedelta
 
 
@@ -51,7 +50,7 @@ def _period_from_text(text):
 
 def _fmt(v):
     try:
-        return f"KSH {float(v):,.0f}"
+        return f"KES {float(v):,.0f}"
     except Exception:
         return str(v)
 
@@ -128,7 +127,7 @@ def _revenue_summary(q, fd, td, lbl):
                ROUND(SUM(amount_total)::numeric,0) AS revenue,
                ROUND(AVG(amount_total)::numeric,0) AS avg_order
         FROM sale_order
-        WHERE state NOT IN ('cancel','draft')
+        WHERE state IN ('sale','done')
           AND date_order>=%s AND date_order<%s
     """, (fd, td))
     r = rows[0] if rows else {}
@@ -154,7 +153,7 @@ def _orders_summary(q, fd, td, lbl):
                DATE(MIN(date_order)) AS first_day,
                DATE(MAX(date_order)) AS last_day
         FROM sale_order
-        WHERE state NOT IN ('cancel','draft')
+        WHERE state IN ('sale','done')
           AND date_order>=%s AND date_order<%s
     """, (fd, td))
     r = rows[0] if rows else {}
@@ -181,7 +180,7 @@ def _top_products(q, fd, td, lbl):
         JOIN sale_order so ON so.id=sol.order_id
         JOIN product_product pp ON pp.id=sol.product_id
         JOIN product_template pt ON pt.id=pp.product_tmpl_id
-        WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+        WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
           AND so.date_order>=%s AND so.date_order<%s
         GROUP BY 1 ORDER BY 2 DESC LIMIT 10
     """, (fd, td))
@@ -197,7 +196,7 @@ def _top_products(q, fd, td, lbl):
         'chart_type': 'bar',
         'chart_labels': [r['product'][:20] for r in rows],
         'chart_values': [float(r['revenue']) for r in rows],
-        'chart_label': 'Revenue (KSH)',
+        'chart_label': 'Revenue (KES)',
         'suggestions': ['Revenue by category', 'Top customers', 'Compare to last month']
     }
 
@@ -210,7 +209,7 @@ def _top_customers(q, fd, td, lbl):
                ROUND(AVG(so.amount_total)::numeric,0) AS avg_order
         FROM sale_order so
         JOIN res_partner rp ON rp.id=so.partner_id
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order>=%s AND so.date_order<%s
         GROUP BY 1 ORDER BY 3 DESC LIMIT 10
     """, (fd, td))
@@ -226,7 +225,7 @@ def _top_customers(q, fd, td, lbl):
         'chart_type': 'bar',
         'chart_labels': [r['customer'][:20] for r in rows],
         'chart_values': [float(r['revenue']) for r in rows],
-        'chart_label': 'Revenue (KSH)',
+        'chart_label': 'Revenue (KES)',
         'suggestions': ['Top products', 'Revenue summary', 'Daily trend']
     }
 
@@ -241,7 +240,7 @@ def _by_category(q, fd, td, lbl):
         JOIN product_product pp ON pp.id=sol.product_id
         JOIN product_template pt ON pt.id=pp.product_tmpl_id
         JOIN product_category pc ON pc.id=pt.categ_id
-        WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+        WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
           AND so.date_order>=%s AND so.date_order<%s
         GROUP BY 1 ORDER BY 2 DESC
     """, (fd, td))
@@ -271,7 +270,7 @@ def _daily_trend(q, fd, td, lbl):
                ROUND(SUM(amount_total)::numeric,0) AS revenue,
                COUNT(DISTINCT id) AS orders
         FROM sale_order
-        WHERE state NOT IN ('cancel','draft')
+        WHERE state IN ('sale','done')
           AND date_order>=%s AND date_order<%s
         GROUP BY 1 ORDER BY 1
     """, (fd, td))
@@ -289,7 +288,7 @@ def _daily_trend(q, fd, td, lbl):
         'chart_type': 'line',
         'chart_labels': [str(r['day']) for r in rows],
         'chart_values': [float(r['revenue']) for r in rows],
-        'chart_label': 'Daily Revenue (KSH)',
+        'chart_label': 'Daily Revenue (KES)',
         'suggestions': ['Top products this period', 'Revenue summary', 'Compare to last month']
     }
 
@@ -304,7 +303,7 @@ def _compare_periods(q, fd, td, lbl):
           COUNT(DISTINCT CASE WHEN date_order>=%s AND date_order<%s THEN id END) AS curr_orders,
           ROUND(SUM(CASE WHEN date_order>=%s AND date_order<%s THEN amount_total ELSE 0 END)::numeric,0) AS prev_rev,
           COUNT(DISTINCT CASE WHEN date_order>=%s AND date_order<%s THEN id END) AS prev_orders
-        FROM sale_order WHERE state NOT IN ('cancel','draft')
+        FROM sale_order WHERE state IN ('sale','done')
           AND date_order>=%s AND date_order<%s
     """, (fd, td, fd, td, prev_fd, fd, prev_fd, fd, prev_fd, td))
     r = rows[0] if rows else {}
@@ -327,7 +326,7 @@ def _compare_periods(q, fd, td, lbl):
         'chart_type': 'bar',
         'chart_labels': [lbl, 'Prior period'],
         'chart_values': [curr, prev],
-        'chart_label': 'Revenue (KSH)',
+        'chart_label': 'Revenue (KES)',
         'suggestions': ['Show me top products', 'Revenue by category', 'Daily trend']
     }
 
@@ -339,7 +338,7 @@ def _aov(q, fd, td, lbl):
                ROUND(MAX(amount_total)::numeric,0) AS max_order,
                COUNT(DISTINCT id) AS orders
         FROM sale_order
-        WHERE state NOT IN ('cancel','draft')
+        WHERE state IN ('sale','done')
           AND date_order>=%s AND date_order<%s
     """, (fd, td))
     r = rows[0] if rows else {}
@@ -365,7 +364,7 @@ def _underperforming(q, fd, td, lbl):
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id
             JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order>=CURRENT_DATE-90 AND so.date_order<CURRENT_DATE-7
             GROUP BY 1 HAVING COUNT(so.id)>=3
         ), recent AS (
@@ -374,7 +373,7 @@ def _underperforming(q, fd, td, lbl):
             FROM sale_order_line sol JOIN sale_order so ON so.id=sol.order_id
             JOIN product_product pp ON pp.id=sol.product_id
             JOIN product_template pt ON pt.id=pp.product_tmpl_id
-            WHERE so.state NOT IN ('cancel','draft') AND sol.display_type IS NULL
+            WHERE so.state IN ('sale','done') AND sol.display_type IS NULL
               AND so.date_order>=%s AND so.date_order<%s GROUP BY 1
         )
         SELECT b.product, b.expected, COALESCE(r.actual,0) AS actual,
@@ -440,11 +439,11 @@ def _new_customers(q, fd, td, lbl):
                COUNT(DISTINCT so.id) AS orders,
                ROUND(SUM(so.amount_total)::numeric,0) AS revenue
         FROM sale_order so JOIN res_partner rp ON rp.id=so.partner_id
-        WHERE so.state NOT IN ('cancel','draft')
+        WHERE so.state IN ('sale','done')
           AND so.date_order>=%s AND so.date_order<%s
           AND NOT EXISTS (
             SELECT 1 FROM sale_order s2 WHERE s2.partner_id=so.partner_id
-              AND s2.state NOT IN ('cancel','draft') AND s2.date_order<%s
+              AND s2.state IN ('sale','done') AND s2.date_order<%s
           )
         GROUP BY 1 ORDER BY 4 DESC LIMIT 10
     """, (fd, td, fd))
@@ -464,7 +463,7 @@ def _fallback(q, fd, td, lbl):
     rows = q("""
         SELECT COUNT(DISTINCT id) AS orders,
                ROUND(SUM(amount_total)::numeric,0) AS revenue
-        FROM sale_order WHERE state NOT IN ('cancel','draft')
+        FROM sale_order WHERE state IN ('sale','done')
           AND date_order>=%s AND date_order<%s
     """, (fd, td))
     r = rows[0] if rows else {}

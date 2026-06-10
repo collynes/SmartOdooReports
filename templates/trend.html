@@ -15,7 +15,7 @@
 <div class="g-2col" style="margin-bottom:14px;">
   <div class="card" style="padding:18px 20px;">
     <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Total Revenue</div>
-    <div style="font-size:24px;font-weight:700;color:#1f2937;">KSH {{ '{:,.0f}'.format(daily | sum(attribute='revenue', start=0) | float) }}</div>
+    <div style="font-size:24px;font-weight:700;color:#1f2937;">KES {{ '{:,.0f}'.format(daily | sum(attribute='revenue', start=0) | float) }}</div>
   </div>
   <div class="card" style="padding:18px 20px;">
     <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Total Orders</div>
@@ -27,7 +27,7 @@
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
     <div style="font-size:13px;font-weight:600;color:#374151;">Daily Revenue</div>
     <div style="font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:5px;">
-      <svg width="24" height="6" viewBox="0 0 24 6"><line x1="0" y1="3" x2="24" y2="3" stroke="rgba(180,130,170,0.8)" stroke-width="1.5" stroke-dasharray="6,4"/></svg>
+      <svg width="24" height="6" viewBox="0 0 24 6"><line x1="0" y1="3" x2="24" y2="3" stroke="var(--p)" opacity="0.5" stroke-width="1.5" stroke-dasharray="6,4"/></svg>
       Prev month
     </div>
   </div>
@@ -47,7 +47,7 @@ const ordData = raw.map(d => parseInt(d.orders));
 const ptRadius = raw.length > 60 ? 0 : 3;
 const gridColor = '#f3f4f6';
 const tickColor = '#9ca3af';
-const PREV_COLOR = 'rgba(180,130,170,0.8)';
+const PREV_COLOR = THEME.alpha(.45);
 const PREV_DASH  = [6, 4];
 
 const prevRevArr = new Array(labels.length).fill(null);
@@ -71,11 +71,11 @@ function buildCharts(prevRevArr, prevOrdArr) {
     options: {
       plugins: {
         legend: { display: true, labels: { filter: legendFilter, color: '#6b7280', font:{size:11}, boxWidth:24 } },
-        tooltip: { callbacks: { label: c => c.dataset.label + ': KSH ' + c.parsed.y.toLocaleString() } }
+        tooltip: { callbacks: { label: c => c.dataset.label + ': KES ' + c.parsed.y.toLocaleString() } }
       },
       scales: {
         x: { type:'category', ticks:{color:tickColor,font:{size:11},maxTicksLimit:12}, grid:{display:false} },
-        y: { ticks:{color:tickColor,font:{size:11},callback:v=>'KSH '+v.toLocaleString()}, grid:{color:gridColor} }
+        y: { ticks:{color:tickColor,font:{size:11},callback:v=>'KES '+v.toLocaleString()}, grid:{color:gridColor} }
       }
     }
   });
@@ -83,8 +83,8 @@ function buildCharts(prevRevArr, prevOrdArr) {
   ordChart = new Chart(document.getElementById('ordChart').getContext('2d'), {
     type: 'line',
     data: { labels, datasets: [
-      { label: 'Orders', data: ordData, borderColor: '#714b67', backgroundColor: 'rgba(113,75,103,.07)',
-        fill: true, tension: 0.35, pointRadius: ptRadius, pointBackgroundColor: '#714b67', borderWidth: 2 },
+      { label: 'Orders', data: ordData, borderColor: THEME.pd(), backgroundColor: THEME.alpha(.07),
+        fill: true, tension: 0.35, pointRadius: ptRadius, pointBackgroundColor: THEME.pd(), borderWidth: 2 },
       { label: 'Prev Month', data: prevOrdArr, borderColor: PREV_COLOR, backgroundColor: 'transparent',
         fill: false, tension: 0.35, pointRadius: 0, borderWidth: 1.5, borderDash: PREV_DASH }
     ]},

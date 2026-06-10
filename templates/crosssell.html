@@ -34,7 +34,7 @@
         <tr>
           <td style="color:#374151;">{{ p.paired_product }}</td>
           <td class="r" style="font-weight:600;">{{ p.co_orders }}</td>
-          <td class="r" style="color:#059669;font-weight:600;">KSH {{ '{:,.0f}'.format(p.pair_rev|float) }}</td>
+          <td class="r" style="color:#059669;font-weight:600;">KES {{ '{:,.0f}'.format(p.pair_rev|float) }}</td>
           <td class="c">
             {% if p.opportunity == 'Bundle' %}
             <span class="badge-ok">Bundle Candidate</span>

@@ -247,6 +247,17 @@ _(none currently known — update this section when new bugs are found)_
 | 2026-04-14 | Updated CLAUDE.md with full receipt scanner documentation |
 | 2026-04-14 | Fixed: `insert-odoo` now writes receipt# to `client_order_ref` AND `note` |
 | 2026-04-14 | Fixed: OCR subprocess now uses `sys.executable` instead of hardcoded `python3` |
+| 2026-06-09 | UI polish pass: Inter font, tabular numbers, bolder headings/tables/badges, shared `.section-title`/`.empty-state` in base.html |
+| 2026-06-09 | Standardized currency label KSH → KES across all templates and Python modules (115 occurrences) |
+| 2026-06-09 | Standardized sales filter to documented `state IN ('sale','done')` (was `NOT IN ('cancel','draft')` in 84 places — now consistent with mobile_api) |
+| 2026-06-09 | Dead-code cleanup: removed unused imports/variables across app.py, chat.py, insights.py, anomalies.py, mobile_api.py, receipt_ocr.py (pyflakes clean) |
+| 2026-06-09 | Added `.claude/launch.json` + local `.env` for local dev against Docker postgres (port 5532) |
+| 2026-06-10 | Shop re-themed from Amazon gold to app theme vars (layout unchanged); Shop nav moved to Tools section |
+| 2026-06-10 | Fixed profile hero `) repeat;">` leak (bad `\"` escaping in style attribute — now URL-encoded SVG) |
+| 2026-06-10 | P&L Dashboard: hero header strip (profile-style), KPI grid capped at 3-across, bigger stat values |
+| 2026-06-10 | Products: lookup strip given breathing room (22px padding, taller input) |
+| 2026-06-10 | Theme-proofing: heatmap/chart/compare colors now use THEME.alpha()/var(--pd) instead of hardcoded purples (teal/amber themes now consistent) |
+| 2026-06-10 | login.html now uses Inter; scoped shop/reconciliation `.empty-state` to avoid base.html collision |
 
 ---
 
