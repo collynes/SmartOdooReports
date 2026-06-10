@@ -4,7 +4,7 @@
 {% block content %}
 <style>
   .stat-value { font-size:1.7rem;font-weight:800;line-height:1.2;letter-spacing:-.3px; }
-  .stat-sub   { font-size:0.78rem;color:#9ca3af;margin-top:5px; }
+  .stat-sub   { font-size:0.78rem;color:#667085;margin-top:5px;font-weight:500; }
   .anal-hero {
     background: linear-gradient(135deg, var(--pdd) 0%, var(--p) 50%, var(--pbdr) 100%);
     border-radius: 16px;
@@ -17,7 +17,7 @@
   .kpi-accent { width:4px;border-radius:2px;flex-shrink:0;min-height:46px; }
 
   .ct-wrap  { display:flex;border:1.5px solid #e5e7eb;border-radius:6px;overflow:hidden; }
-  .ct-btn   { padding:3px 10px;font-size:12px;font-weight:500;background:#fff;color:#9ca3af;border:none;cursor:pointer;transition:all .12s; }
+  .ct-btn   { padding:3px 10px;font-size:12px;font-weight:600;background:#fff;color:#667085;border:none;cursor:pointer;transition:all .12s; }
   .ct-btn+.ct-btn { border-left:1.5px solid #e5e7eb; }
   .ct-btn:hover  { background:#f5f0f4;color:var(--p); }
   .ct-btn.active { background:var(--p);color:#fff; }
@@ -44,7 +44,7 @@
   @media(min-width:1200px) { .stock-grid { grid-template-columns:repeat(5,1fr); } }
   .stock-item { background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px; }
   .stock-name { font-size:0.78rem;font-weight:600;color:#374151;margin-bottom:5px;line-height:1.3; }
-  .stock-qty  { font-size:0.7rem;color:#9ca3af; }
+  .stock-qty  { font-size:0.7rem;color:#667085; }
   .stock-val  { font-size:0.95rem;font-weight:700;color:#017E84;margin-top:3px; }
   .stock-margin { font-size:0.68rem;color:#16a34a;font-weight:500;margin-top:2px; }
 
@@ -63,7 +63,7 @@
 
   .donut-wrap { display:flex;gap:16px;align-items:center;flex-wrap:wrap; }
   .donut-center { position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none; }
-  .donut-legend { display:flex;flex-direction:column;gap:6px;font-size:12px;flex:1;min-width:110px; }
+  .donut-legend { display:flex;flex-direction:column;gap:6px;font-size:12px;flex:1;min-width:110px;color:#344054;font-weight:500; }
   .donut-legend-item { display:flex;align-items:center;justify-content:space-between;gap:8px; }
   .donut-legend-dot  { width:9px;height:9px;border-radius:50%;flex-shrink:0; }
 
@@ -74,7 +74,7 @@
   .tab-content.active { display:block; }
 
   .card-header-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px; }
-  .card-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin-bottom:6px; }
+  .card-label { font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#667085;margin-bottom:6px; }
 </style>
 
 <!-- Page header — hero strip, same family as Business Profile -->
@@ -146,7 +146,7 @@
       <div style="position:relative;width:130px;height:130px;flex-shrink:0;">
         <canvas id="revDonutChart" width="130" height="130"></canvas>
         <div class="donut-center">
-          <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
+          <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
           <div id="rev-donut-total" style="font-size:13px;font-weight:700;color:#017E84;"></div>
         </div>
       </div>
@@ -157,7 +157,7 @@
       <div style="position:relative;width:130px;height:130px;flex-shrink:0;">
         <canvas id="grossDonutChart" width="130" height="130"></canvas>
         <div class="donut-center">
-          <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Gross</div>
+          <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Gross</div>
           <div id="gross-donut-total" style="font-size:13px;font-weight:700;color:#16a34a;"></div>
         </div>
       </div>
@@ -168,7 +168,7 @@
       <div style="position:relative;width:130px;height:130px;flex-shrink:0;">
         <canvas id="netDonutChart" width="130" height="130"></canvas>
         <div class="donut-center">
-          <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Net</div>
+          <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Net</div>
           <div id="net-donut-total" style="font-size:13px;font-weight:700;color:#16a34a;"></div>
         </div>
       </div>
@@ -192,7 +192,7 @@
           <div style="position:relative;width:200px;height:200px;flex-shrink:0;">
             <canvas id="pnlDonutChart" width="200" height="200"></canvas>
             <div class="donut-center">
-              <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
+              <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
               <div id="pnl-donut-total" style="font-size:13px;font-weight:700;color:#017E84;"></div>
             </div>
           </div>
@@ -206,7 +206,7 @@
         <div style="position:relative;flex-shrink:0;width:170px;height:170px;">
           <canvas id="expDonutChart" width="170" height="170"></canvas>
           <div class="donut-center">
-            <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total OpEx</div>
+            <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total OpEx</div>
             <div id="donut-total" style="font-size:13px;font-weight:700;color:var(--p);"></div>
           </div>
         </div>
@@ -254,7 +254,7 @@
           <div style="position:relative;width:200px;height:200px;flex-shrink:0;">
             <canvas id="topProdDonutChart" width="200" height="200"></canvas>
             <div class="donut-center">
-              <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
+              <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
               <div id="top-donut-total" style="font-size:13px;font-weight:700;color:#017E84;"></div>
             </div>
           </div>
@@ -268,7 +268,7 @@
         <div style="position:relative;flex-shrink:0;width:160px;height:160px;">
           <canvas id="stockDonutChart" width="160" height="160"></canvas>
           <div class="donut-center">
-            <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total Value</div>
+            <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total Value</div>
             <div id="stock-total-label" style="font-size:13px;font-weight:700;color:#017E84;"></div>
           </div>
         </div>
@@ -314,10 +314,10 @@
           </div>
           <div style="text-align:right;">
             <div class="card-label">Avg / Month</div>
-            <div id="dir-shop-avg" style="font-size:1rem;font-weight:600;color:#9ca3af;">—</div>
+            <div id="dir-shop-avg" style="font-size:1rem;font-weight:600;color:#667085;">—</div>
           </div>
         </div>
-        <div id="dir-shop-months" style="font-size:11px;color:#9ca3af;margin-top:8px;"></div>
+        <div id="dir-shop-months" style="font-size:11px;color:#667085;margin-top:8px;"></div>
       </div>
     </div>
     <div class="dir-card">
@@ -333,10 +333,10 @@
           </div>
           <div style="text-align:right;">
             <div class="card-label">Avg / Month</div>
-            <div id="dir-kemboi-avg" style="font-size:1rem;font-weight:600;color:#9ca3af;">—</div>
+            <div id="dir-kemboi-avg" style="font-size:1rem;font-weight:600;color:#667085;">—</div>
           </div>
         </div>
-        <div id="dir-kemboi-months" style="font-size:11px;color:#9ca3af;margin-top:8px;"></div>
+        <div id="dir-kemboi-months" style="font-size:11px;color:#667085;margin-top:8px;"></div>
       </div>
     </div>
     <div class="dir-card">
@@ -352,10 +352,10 @@
           </div>
           <div style="text-align:right;">
             <div class="card-label">Avg / Month</div>
-            <div id="dir-mutai-avg" style="font-size:1rem;font-weight:600;color:#9ca3af;">—</div>
+            <div id="dir-mutai-avg" style="font-size:1rem;font-weight:600;color:#667085;">—</div>
           </div>
         </div>
-        <div id="dir-mutai-months" style="font-size:11px;color:#9ca3af;margin-top:8px;"></div>
+        <div id="dir-mutai-months" style="font-size:11px;color:#667085;margin-top:8px;"></div>
       </div>
     </div>
   </div>
@@ -376,7 +376,7 @@
           <div style="position:relative;width:190px;height:190px;flex-shrink:0;">
             <canvas id="dirSplitDonutChart" width="190" height="190"></canvas>
             <div class="donut-center">
-              <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total</div>
+              <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Total</div>
               <div id="dir-split-total" style="font-size:13px;font-weight:700;color:var(--p);"></div>
             </div>
           </div>
@@ -398,7 +398,7 @@
           <div style="position:relative;width:180px;height:180px;flex-shrink:0;">
             <canvas id="dirMonDonutChart" width="180" height="180"></canvas>
             <div class="donut-center">
-              <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Net Profit</div>
+              <div style="font-size:10px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Net Profit</div>
               <div id="dirmon-donut-total" style="font-size:13px;font-weight:700;color:#16a34a;"></div>
             </div>
           </div>
@@ -432,8 +432,14 @@
 
 <script>
 const KES = v => 'KES ' + Number(v).toLocaleString('en-KE', {minimumFractionDigits:0, maximumFractionDigits:0});
-const C = { purple: THEME.p(), teal:'#017E84', orange:'#F77E53', green:'#16a34a', red:'#dc2626', blue:'#4f46e5', yellow:'#E67E22', gray:'#9ca3af' };
-const PAL = [C.purple,C.teal,C.orange,C.green,C.blue,C.yellow,C.red,C.gray,'#9B59B6','#1ABC9C','#2ECC71','#E74C3C'];
+const C = { purple: THEME.p(), teal:'#017E84', orange:'#F77E53', green:'#16a34a', red:'#dc2626', gray:'#667085' };
+const DONUT_PAL = ['#5A3858','#6F4A6A','#845E7C','#98738D','#AD899F','#C09FB0','#D2B6C3','#E3CED6'];
+const PAL = DONUT_PAL;
+
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.color = '#4b5563';
+  Chart.defaults.plugins.legend.labels.color = '#4b5563';
+}
 
 let activeYear = 'all';
 let pnlBarInst, pnlDonutInst, expDonutInst;
@@ -470,11 +476,11 @@ function buildDonutLegend(elId, labels, values, colors) {
     return `<div class="donut-legend-item">
       <div style="display:flex;align-items:center;gap:5px;min-width:0;">
         <div class="donut-legend-dot" style="background:${colors[i]};"></div>
-        <span style="color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${lbl}</span>
+        <span style="color:#344054;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;">${lbl}</span>
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0;">
-        <span style="color:#9ca3af;">${pct}%</span>
-        <span style="font-weight:600;color:#374151;">${KES(values[i])}</span>
+        <span style="color:#667085;">${pct}%</span>
+        <span style="font-weight:700;color:#344054;">${KES(values[i])}</span>
       </div>
     </div>`;
   }).join('');
@@ -550,7 +556,7 @@ function renderDirMonDonut() {
     dirMonDonutInst = buildDonut('dirMonDonutChart', profRows.map(r=>r.month), profRows.map(r=>r.net_profit), PAL);
     buildDonutLegend('dirmon-donut-legend', profRows.map(r=>r.month), profRows.map(r=>r.net_profit), PAL);
   } else {
-    document.getElementById('dirmon-donut-legend').innerHTML = '<div style="color:#9ca3af;font-size:12px;">No profitable months</div>';
+    document.getElementById('dirmon-donut-legend').innerHTML = '<div style="color:#667085;font-size:12px;">No profitable months</div>';
   }
 }
 
@@ -621,7 +627,7 @@ async function loadOverview() {
   if (gross > 0) {
     const labels = net >= 0 ? ['OpEx','Net Profit'] : ['OpEx','Net Loss'];
     const vals   = net >= 0 ? [Math.max(opex,0), net] : [Math.max(opex,0) + Math.abs(net), 0.01];
-    const colors = net >= 0 ? [C.purple, C.green] : [C.red, '#eee'];
+    const colors = net >= 0 ? [C.purple, C.green] : [C.red, '#e5e7eb'];
     grossDonutInst = buildDonut('grossDonutChart', labels, vals, colors);
     buildDonutLegend('gross-donut-legend', labels, [Math.max(opex,0), Math.abs(net)], colors);
   } else {
@@ -636,7 +642,7 @@ async function loadOverview() {
     netDonutInst = buildDonut('netDonutChart', profitMonths.map(r=>r.month), profitMonths.map(r=>r.net_profit), PAL);
     buildDonutLegend('net-donut-legend', profitMonths.map(r=>r.month), profitMonths.map(r=>r.net_profit), PAL);
   } else {
-    document.getElementById('net-donut-legend').innerHTML = '<div style="color:#9ca3af;font-size:12px;">No profitable months</div>';
+    document.getElementById('net-donut-legend').innerHTML = '<div style="color:#667085;font-size:12px;">No profitable months</div>';
   }
 
   pnlBarInst = destroyChart(pnlBarInst);
@@ -655,8 +661,9 @@ async function loadOverview() {
       },
       options: {
         responsive:true,
-        plugins:{ legend:{ position:'bottom', labels:{boxWidth:12,font:{size:11}} } },
-        scales:{ y:{ ticks:{ callback:v=>'KES '+(v/1000).toFixed(0)+'k' } } }
+        plugins:{ legend:{ position:'bottom', labels:{boxWidth:12,font:{size:11,color:'#4b5563'}} } },
+        scales:{ y:{ ticks:{ color:'#667085', callback:v=>'KES '+(v/1000).toFixed(0)+'k' }, grid:{color:'#e5e7eb'} },
+                 x:{ ticks:{ color:'#667085' }, grid:{color:'#f1f5f9'} } }
       }
     });
   }
@@ -667,16 +674,16 @@ async function loadOverview() {
   if (expCats && expCats.length) {
     const totalOpex = expCats.reduce((s, r) => s + r.amount, 0);
     document.getElementById('donut-total').textContent = KES(totalOpex);
-    expDonutInst = buildDonut('expDonutChart', expCats.map(r=>r.category), expCats.map(r=>r.amount), PAL, { cutout:'68%' });
-    buildDonutLegend('exp-legend', expCats.map(r=>r.category), expCats.map(r=>r.amount), PAL);
+    expDonutInst = buildDonut('expDonutChart', expCats.map(r=>r.category), expCats.map(r=>r.amount), DONUT_PAL, { cutout:'68%' });
+    buildDonutLegend('exp-legend', expCats.map(r=>r.category), expCats.map(r=>r.amount), DONUT_PAL);
   } else {
     document.getElementById('donut-total').textContent = '—';
-    document.getElementById('exp-legend').innerHTML = '<div style="color:#9ca3af;font-size:12px;">No expense data</div>';
+    document.getElementById('exp-legend').innerHTML = '<div style="color:#667085;font-size:12px;">No expense data</div>';
   }
 
   const tbody = document.getElementById('pnl-tbody');
   if (!_pnlData.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:20px;">No data for this period</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#667085;padding:20px;">No data for this period</td></tr>';
   } else {
     let totRev=0,totCogs=0,totOpex=0,totNet=0;
     tbody.innerHTML = _pnlData.map(r => {
@@ -745,7 +752,7 @@ async function loadProducts() {
   const container = document.getElementById('stock-grid-container');
   const pillsEl   = document.getElementById('stock-summary-pills');
   if (!stock || !stock.length) {
-    container.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:20px;">No stock data</p>';
+    container.innerHTML = '<p style="color:#667085;text-align:center;padding:20px;">No stock data</p>';
     return;
   }
   const totalVal = stock.reduce((s,r) => s + (r.value||0), 0);
