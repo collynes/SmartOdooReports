@@ -13,6 +13,7 @@ import psycopg2
 import psycopg2.extras
 import os
 from datetime import datetime, timedelta
+import calendar
 from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha512
@@ -26,6 +27,7 @@ TOKEN_EXPIRE = 30  # days
 
 ODOO_URL = os.getenv('ODOO_URL', 'http://localhost:8069')
 ODOO_DB  = os.getenv('DB_NAME', 'odoo18')
+MONTHLY_REVENUE_TARGET = float(os.getenv('MONTHLY_REVENUE_TARGET', '450000'))
 
 # Webapp users from .env — these also work as mobile login (mapped to Odoo admin)
 WEBAPP_USERS = {
@@ -155,6 +157,25 @@ class LoginResponse(BaseModel):
     expires_in_days: int = TOKEN_EXPIRE
     user_id: int
     name: str
+
+class OwnerNotification(BaseModel):
+    id: str
+    category: str
+    priority: str
+    title: str
+    body: str
+    metric_label: Optional[str] = None
+    metric_value: Optional[float] = None
+    action_label: Optional[str] = None
+    route: Optional[str] = None
+    created_at: str
+
+class OwnerNotificationsResponse(BaseModel):
+    date: str
+    count: int
+    critical_count: int
+    warning_count: int
+    results: list[OwnerNotification]
 
 # ════════════════════════════════════════════════════════════════
 # AUTH
@@ -558,6 +579,221 @@ def expenses(
     total = sum(float(r['amount_total'] or 0) for r in rows)
     return {'total': total, 'date_from': date_from, 'date_to': date_to,
             'count': len(rows), 'results': rows}
+
+
+# ════════════════════════════════════════════════════════════════
+# OWNER NOTIFICATIONS
+# ════════════════════════════════════════════════════════════════
+def _owner_notification(
+    *,
+    notification_id: str,
+    category: str,
+    priority: str,
+    title: str,
+    body: str,
+    metric_label: Optional[str] = None,
+    metric_value: Optional[float] = None,
+    action_label: Optional[str] = None,
+    route: Optional[str] = None,
+) -> OwnerNotification:
+    return OwnerNotification(
+        id=notification_id,
+        category=category,
+        priority=priority,
+        title=title,
+        body=body,
+        metric_label=metric_label,
+        metric_value=metric_value,
+        action_label=action_label,
+        route=route,
+        created_at=datetime.utcnow().isoformat(timespec='seconds') + 'Z',
+    )
+
+
+@app.get('/api/v1/owner/notifications', response_model=OwnerNotificationsResponse,
+         tags=['Owner'], summary='Owner alerts: stock, target pace, invoices, expenses')
+def owner_notifications(user=Depends(current_user)):
+    today = datetime.today().date()
+    month_from = today.replace(day=1)
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+    daily_target = MONTHLY_REVENUE_TARGET / days_in_month if days_in_month else 0
+    expected_mtd = daily_target * today.day
+
+    revenue_today = query_one("""
+        SELECT COALESCE(SUM(sol.price_subtotal), 0) AS revenue
+        FROM sale_order so
+        JOIN sale_order_line sol ON sol.order_id = so.id
+        WHERE so.state IN ('sale','done')
+          AND so.date_order::date = %s
+    """, (today,))
+
+    revenue_month = query_one("""
+        SELECT COALESCE(SUM(sol.price_subtotal), 0) AS revenue
+        FROM sale_order so
+        JOIN sale_order_line sol ON sol.order_id = so.id
+        WHERE so.state IN ('sale','done')
+          AND so.date_order::date BETWEEN %s AND %s
+    """, (month_from, today))
+
+    zero_stock = query_one("""
+        SELECT COUNT(DISTINCT pp.id) AS count
+        FROM product_product pp
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        LEFT JOIN (
+            SELECT sq.product_id, SUM(sq.quantity) AS qty
+            FROM stock_quant sq
+            JOIN stock_location sl ON sl.id = sq.location_id
+            WHERE sl.usage = 'internal'
+            GROUP BY sq.product_id
+        ) s ON s.product_id = pp.id
+        WHERE pt.type = 'consu' AND pt.active = true
+          AND COALESCE(s.qty, 0) <= 0
+    """)
+
+    low_stock = query_one("""
+        SELECT COUNT(DISTINCT pp.id) AS count
+        FROM product_product pp
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        LEFT JOIN (
+            SELECT sq.product_id, SUM(sq.quantity) AS qty
+            FROM stock_quant sq
+            JOIN stock_location sl ON sl.id = sq.location_id
+            WHERE sl.usage = 'internal'
+            GROUP BY sq.product_id
+        ) s ON s.product_id = pp.id
+        WHERE pt.type = 'consu' AND pt.active = true
+          AND COALESCE(s.qty, 0) > 0
+          AND COALESCE(s.qty, 0) <= 5
+    """)
+
+    unpaid = query_one("""
+        SELECT COUNT(*) AS count, COALESCE(SUM(am.amount_residual), 0) AS amount_due
+        FROM account_move am
+        WHERE am.move_type = 'out_invoice'
+          AND am.state = 'posted'
+          AND am.payment_state IN ('not_paid', 'partial')
+          AND am.amount_residual > 0
+    """)
+
+    month_expenses = query_one("""
+        SELECT COALESCE(SUM(am.amount_total), 0) AS total
+        FROM account_move am
+        WHERE am.move_type = 'in_invoice'
+          AND am.state != 'cancel'
+          AND am.invoice_date BETWEEN %s AND %s
+    """, (month_from, today))
+
+    alerts: list[OwnerNotification] = []
+    today_revenue = float(revenue_today['revenue'] or 0)
+    month_revenue = float(revenue_month['revenue'] or 0)
+    zero_count = int(zero_stock['count'] or 0)
+    low_count = int(low_stock['count'] or 0)
+    unpaid_count = int(unpaid['count'] or 0)
+    unpaid_total = float(unpaid['amount_due'] or 0)
+    expense_total = float(month_expenses['total'] or 0)
+
+    if zero_count:
+        alerts.append(_owner_notification(
+            notification_id=f'stock-zero-{today}',
+            category='stock',
+            priority='critical',
+            title=f'{zero_count} products are out of stock',
+            body='These can block sales today. Review the reorder list before checking slower items.',
+            metric_label='Out of stock',
+            metric_value=zero_count,
+            action_label='Open stock',
+            route='stock',
+        ))
+
+    if low_count:
+        alerts.append(_owner_notification(
+            notification_id=f'stock-low-{today}',
+            category='stock',
+            priority='warning',
+            title=f'{low_count} products are running low',
+            body='Keep fast-moving party items available before weekend and event demand picks up.',
+            metric_label='Low stock',
+            metric_value=low_count,
+            action_label='Review stock',
+            route='stock',
+        ))
+
+    if daily_target and today_revenue < daily_target * 0.65:
+        alerts.append(_owner_notification(
+            notification_id=f'target-daily-{today}',
+            category='sales',
+            priority='warning',
+            title='Today is behind the sales pace',
+            body=f'Today is at KES {today_revenue:,.0f} against a daily pace of KES {daily_target:,.0f}.',
+            metric_label='Today revenue',
+            metric_value=today_revenue,
+            action_label='Check sales',
+            route='sales',
+        ))
+    elif daily_target and today_revenue >= daily_target:
+        alerts.append(_owner_notification(
+            notification_id=f'target-daily-hit-{today}',
+            category='sales',
+            priority='info',
+            title='Today is on target',
+            body=f'Today has reached KES {today_revenue:,.0f}; keep the best sellers visible.',
+            metric_label='Today revenue',
+            metric_value=today_revenue,
+            action_label='View sales',
+            route='sales',
+        ))
+
+    if expected_mtd and month_revenue < expected_mtd * 0.85:
+        gap = expected_mtd - month_revenue
+        alerts.append(_owner_notification(
+            notification_id=f'target-month-{today}',
+            category='target',
+            priority='warning',
+            title='Month-to-date revenue is behind pace',
+            body=f'The shop is about KES {gap:,.0f} behind the monthly target pace.',
+            metric_label='Target gap',
+            metric_value=gap,
+            action_label='Open dashboard',
+            route='dashboard',
+        ))
+
+    if unpaid_count:
+        priority = 'critical' if unpaid_total >= 50000 else 'warning'
+        alerts.append(_owner_notification(
+            notification_id=f'invoices-unpaid-{today}',
+            category='cashflow',
+            priority=priority,
+            title=f'{unpaid_count} customer invoices need follow-up',
+            body=f'Outstanding customer balance is KES {unpaid_total:,.0f}.',
+            metric_label='Amount due',
+            metric_value=unpaid_total,
+            action_label='Review customers',
+            route='customers',
+        ))
+
+    if month_revenue > 0 and expense_total > month_revenue * 0.45:
+        alerts.append(_owner_notification(
+            notification_id=f'expenses-pressure-{today}',
+            category='expenses',
+            priority='info',
+            title='Expenses are taking a large share this month',
+            body=f'Vendor bills total KES {expense_total:,.0f}, about {(expense_total / month_revenue) * 100:.0f}% of sales.',
+            metric_label='Expenses',
+            metric_value=expense_total,
+            action_label='Review expenses',
+            route='expenses',
+        ))
+
+    priority_order = {'critical': 0, 'warning': 1, 'info': 2}
+    alerts.sort(key=lambda n: (priority_order.get(n.priority, 9), n.category, n.title))
+
+    return OwnerNotificationsResponse(
+        date=str(today),
+        count=len(alerts),
+        critical_count=sum(1 for n in alerts if n.priority == 'critical'),
+        warning_count=sum(1 for n in alerts if n.priority == 'warning'),
+        results=alerts,
+    )
 
 
 # ════════════════════════════════════════════════════════════════

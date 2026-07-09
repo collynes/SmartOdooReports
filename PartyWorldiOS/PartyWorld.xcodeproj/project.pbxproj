@@ -1,0 +1,397 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		21888AEF7626A970B75F2E4F /* CustomersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12DEF02C3A2EB809E7649ECB /* CustomersView.swift */; };
+		2718DDB812EB5D5370F2A39D /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BB28090ECE2F0316D0AFFF /* AppState.swift */; };
+		2DDB77E5BCEE181E0D314E4F /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA6A5B3C5C50366FE97FF6D /* DashboardView.swift */; };
+		33EA232D6D2C0CB72DB6C2A0 /* AlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35B52C5078EEE4B30D09AC0E /* AlertsView.swift */; };
+		39BB472D8AEEF1AAFD74F55B /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D556818D042E528196E1359 /* APIClient.swift */; };
+		3EAB025C18FC0082D468D139 /* NotificationCenterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DCFF6AC9D10D99A22033905 /* NotificationCenterService.swift */; };
+		576AA00DD284DCEBADA89BF3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A928B43BA836CAE710247310 /* SettingsView.swift */; };
+		9157682130F3CED223C6A295 /* StockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1862866C1FBA042F1B715FA7 /* StockView.swift */; };
+		92A3BC0FD8F1767C3687249D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E47A0AAA0373BAF76D4FE97C /* RootView.swift */; };
+		996C02B0A95D4332F33DA7AC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9EECB8377ACC1985F382AF2 /* Assets.xcassets */; };
+		B81CA778B3B35B8E789FF1D1 /* SalesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA059A56DE7C8EE9E2B1C1D /* SalesView.swift */; };
+		C0EF4D892FF35D642027E27C /* PartyWorldModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFA5892CE5E824F6B419AE25 /* PartyWorldModels.swift */; };
+		D222004BC74EF19241C64B7C /* PWTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527D127BA020A657753A25BB /* PWTheme.swift */; };
+		D68EC30EA7DF010979693D26 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348D442520AEC6DFB2E61436 /* SignInView.swift */; };
+		DD7091D28E3A850F76248078 /* PartyWorldApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD02D84019F9B6FCC1736C58 /* PartyWorldApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0CA6A5B3C5C50366FE97FF6D /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		12DEF02C3A2EB809E7649ECB /* CustomersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomersView.swift; sourceTree = "<group>"; };
+		1862866C1FBA042F1B715FA7 /* StockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockView.swift; sourceTree = "<group>"; };
+		1DCFF6AC9D10D99A22033905 /* NotificationCenterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCenterService.swift; sourceTree = "<group>"; };
+		348D442520AEC6DFB2E61436 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
+		35B52C5078EEE4B30D09AC0E /* AlertsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsView.swift; sourceTree = "<group>"; };
+		527D127BA020A657753A25BB /* PWTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PWTheme.swift; sourceTree = "<group>"; };
+		5D556818D042E528196E1359 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		86BB28090ECE2F0316D0AFFF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		8F87D37650E20CFC31F158F6 /* PartyWorld.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PartyWorld.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A104153745B84C1DE08EB99D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A928B43BA836CAE710247310 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A9EECB8377ACC1985F382AF2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AD02D84019F9B6FCC1736C58 /* PartyWorldApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartyWorldApp.swift; sourceTree = "<group>"; };
+		BAA059A56DE7C8EE9E2B1C1D /* SalesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalesView.swift; sourceTree = "<group>"; };
+		E47A0AAA0373BAF76D4FE97C /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		EFA5892CE5E824F6B419AE25 /* PartyWorldModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartyWorldModels.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		00A612F3764593B60FF3C848 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				5D556818D042E528196E1359 /* APIClient.swift */,
+				86BB28090ECE2F0316D0AFFF /* AppState.swift */,
+				1DCFF6AC9D10D99A22033905 /* NotificationCenterService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		2B61F437F7A2F951DB7494F5 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A9EECB8377ACC1985F382AF2 /* Assets.xcassets */,
+				A104153745B84C1DE08EB99D /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		5F95AA476B1D95EBEC5F9E8B /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				EFA5892CE5E824F6B419AE25 /* PartyWorldModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		610006C5C1BAFF3BFA56065B /* PartyWorld */ = {
+			isa = PBXGroup;
+			children = (
+				AD02D84019F9B6FCC1736C58 /* PartyWorldApp.swift */,
+				D88DAF0756BCAC6176AB8BD8 /* Design */,
+				5F95AA476B1D95EBEC5F9E8B /* Models */,
+				2B61F437F7A2F951DB7494F5 /* Resources */,
+				00A612F3764593B60FF3C848 /* Services */,
+				980CAEE83AB8BF0D7E0610A4 /* Views */,
+			);
+			path = PartyWorld;
+			sourceTree = "<group>";
+		};
+		725B1968D07C8186E1918D4B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8F87D37650E20CFC31F158F6 /* PartyWorld.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		980CAEE83AB8BF0D7E0610A4 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				35B52C5078EEE4B30D09AC0E /* AlertsView.swift */,
+				12DEF02C3A2EB809E7649ECB /* CustomersView.swift */,
+				0CA6A5B3C5C50366FE97FF6D /* DashboardView.swift */,
+				E47A0AAA0373BAF76D4FE97C /* RootView.swift */,
+				BAA059A56DE7C8EE9E2B1C1D /* SalesView.swift */,
+				A928B43BA836CAE710247310 /* SettingsView.swift */,
+				348D442520AEC6DFB2E61436 /* SignInView.swift */,
+				1862866C1FBA042F1B715FA7 /* StockView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		BD9E428944CC250AAFD5E202 = {
+			isa = PBXGroup;
+			children = (
+				610006C5C1BAFF3BFA56065B /* PartyWorld */,
+				725B1968D07C8186E1918D4B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D88DAF0756BCAC6176AB8BD8 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				527D127BA020A657753A25BB /* PWTheme.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F5CE7CEA5A771A62C8D67660 /* PartyWorld */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A4A7A9E9E85D50417E57C7D2 /* Build configuration list for PBXNativeTarget "PartyWorld" */;
+			buildPhases = (
+				E9D0304B90B17BCB85A57233 /* Sources */,
+				CC1F0A01C84A183946B59717 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PartyWorld;
+			packageProductDependencies = (
+			);
+			productName = PartyWorld;
+			productReference = 8F87D37650E20CFC31F158F6 /* PartyWorld.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D3A4CD490CBE861AE7844E91 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 4AB0DE74D5C0AFF40B346499 /* Build configuration list for PBXProject "PartyWorld" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = BD9E428944CC250AAFD5E202;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 725B1968D07C8186E1918D4B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F5CE7CEA5A771A62C8D67660 /* PartyWorld */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CC1F0A01C84A183946B59717 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				996C02B0A95D4332F33DA7AC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E9D0304B90B17BCB85A57233 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				39BB472D8AEEF1AAFD74F55B /* APIClient.swift in Sources */,
+				33EA232D6D2C0CB72DB6C2A0 /* AlertsView.swift in Sources */,
+				2718DDB812EB5D5370F2A39D /* AppState.swift in Sources */,
+				21888AEF7626A970B75F2E4F /* CustomersView.swift in Sources */,
+				2DDB77E5BCEE181E0D314E4F /* DashboardView.swift in Sources */,
+				3EAB025C18FC0082D468D139 /* NotificationCenterService.swift in Sources */,
+				D222004BC74EF19241C64B7C /* PWTheme.swift in Sources */,
+				DD7091D28E3A850F76248078 /* PartyWorldApp.swift in Sources */,
+				C0EF4D892FF35D642027E27C /* PartyWorldModels.swift in Sources */,
+				92A3BC0FD8F1767C3687249D /* RootView.swift in Sources */,
+				B81CA778B3B35B8E789FF1D1 /* SalesView.swift in Sources */,
+				576AA00DD284DCEBADA89BF3 /* SettingsView.swift in Sources */,
+				D68EC30EA7DF010979693D26 /* SignInView.swift in Sources */,
+				9157682130F3CED223C6A295 /* StockView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1B1F412AC87C471C7862E496 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		708CAABE5B13AE3324E83276 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		7D0FF2D63147A034FE5D0F8B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PartyWorld/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.partyworld.insights;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		EC9602EFCF63ACA99F20CFE4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PartyWorld/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.partyworld.insights;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4AB0DE74D5C0AFF40B346499 /* Build configuration list for PBXProject "PartyWorld" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B1F412AC87C471C7862E496 /* Debug */,
+				708CAABE5B13AE3324E83276 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A4A7A9E9E85D50417E57C7D2 /* Build configuration list for PBXNativeTarget "PartyWorld" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EC9602EFCF63ACA99F20CFE4 /* Debug */,
+				7D0FF2D63147A034FE5D0F8B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D3A4CD490CBE861AE7844E91 /* Project object */;
+}

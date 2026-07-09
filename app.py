@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, stream_with_context
 from functools import wraps
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 import psycopg2
 import psycopg2.extras
 import os, io, json, sys
 import subprocess
 from datetime import date, timedelta
+import calendar
 from dotenv import load_dotenv
 from insights import get_daily_insight
 from projections import get_projections
@@ -28,6 +30,7 @@ APP_USERS = {
     os.getenv('APP_USERNAME', 'admin'): os.getenv('APP_PASSWORD', 'password'),
     'Admin': 'Party@2026!Admin',
 }
+MONTHLY_REVENUE_TARGET = float(os.getenv('MONTHLY_REVENUE_TARGET', '450000'))
 
 DB_CONFIG = {
     'host':     os.getenv('DB_HOST', 'localhost'),
@@ -328,6 +331,31 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def _mobile_serializer():
+    return URLSafeTimedSerializer(app.secret_key, salt='partyworld-mobile-api')
+
+def create_mobile_token(username):
+    return _mobile_serializer().dumps({'username': username})
+
+def verify_mobile_token(token):
+    try:
+        return _mobile_serializer().loads(token, max_age=60 * 60 * 24 * 30)
+    except (BadSignature, SignatureExpired):
+        return None
+
+def mobile_api_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            user = verify_mobile_token(auth.removeprefix('Bearer ').strip())
+            if user:
+                return f(*args, **kwargs)
+        if session.get('logged_in'):
+            return f(*args, **kwargs)
+        return jsonify({'detail': 'Invalid or expired token'}), 401
+    return decorated
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
@@ -338,10 +366,327 @@ def login():
         error = 'Invalid username or password'
     return render_template('login.html', error=error)
 
+@app.route('/auth/login', methods=['POST'])
+def mobile_login():
+    """JSON login for native/mobile clients. Mirrors mobile_api.py."""
+    data = request.get_json(silent=True) or request.form
+    username = data.get('username', '')
+    password = data.get('password', '')
+    if username in APP_USERS and password == APP_USERS[username]:
+        session['logged_in'] = True
+        return jsonify({
+            'access_token': create_mobile_token(username),
+            'token_type': 'bearer',
+            'expires_in_days': 30,
+            'user_id': 0,
+            'name': username,
+        })
+    return jsonify({'detail': 'Invalid credentials'}), 401
+
+@app.route('/auth/me')
+@mobile_api_required
+def mobile_me():
+    return jsonify({'name': 'Party World', 'login': 'mobile'})
+
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+
+# ── Native/mobile API compatibility ───────────────────────────
+
+@app.route('/api/v1/dashboard')
+@mobile_api_required
+def mobile_dashboard():
+    today = date.today()
+    month_from = today.replace(day=1)
+
+    revenue_today = query("""
+        SELECT COALESCE(SUM(sol.price_subtotal), 0) AS revenue
+        FROM sale_order so
+        JOIN sale_order_line sol ON sol.order_id = so.id
+        WHERE so.state IN ('sale','done')
+          AND so.date_order::date = %s
+    """, (today,))
+
+    revenue_month = query("""
+        SELECT COALESCE(SUM(sol.price_subtotal), 0) AS revenue
+        FROM sale_order so
+        JOIN sale_order_line sol ON sol.order_id = so.id
+        WHERE so.state IN ('sale','done')
+          AND so.date_order::date BETWEEN %s AND %s
+    """, (month_from, today))
+
+    orders_today = query("""
+        SELECT COUNT(*) AS total
+        FROM sale_order
+        WHERE state IN ('sale','done') AND date_order::date = %s
+    """, (today,))
+
+    stock_value = query("""
+        SELECT COALESCE(SUM(sq.quantity * (pp.standard_price->>'1')::numeric), 0) AS value
+        FROM stock_quant sq
+        JOIN product_product pp ON pp.id = sq.product_id
+        JOIN stock_location sl ON sl.id = sq.location_id
+        WHERE sl.usage = 'internal'
+    """)
+
+    top_products = query("""
+        SELECT pt.name->>'en_US' AS product, SUM(sol.product_uom_qty) AS qty_sold,
+               SUM(sol.price_subtotal) AS revenue
+        FROM sale_order so
+        JOIN sale_order_line sol ON sol.order_id = so.id
+        JOIN product_product pp ON pp.id = sol.product_id
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        WHERE so.state IN ('sale','done')
+          AND so.date_order::date BETWEEN %s AND %s
+        GROUP BY pt.name
+        ORDER BY revenue DESC
+        LIMIT 5
+    """, (month_from, today))
+
+    low_stock_count = query("""
+        SELECT COUNT(DISTINCT pp.id) AS count
+        FROM product_product pp
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        LEFT JOIN (
+            SELECT sq.product_id, SUM(sq.quantity) AS qty
+            FROM stock_quant sq
+            JOIN stock_location sl ON sl.id = sq.location_id
+            WHERE sl.usage = 'internal'
+            GROUP BY sq.product_id
+        ) s ON s.product_id = pp.id
+        WHERE pt.type = 'consu' AND pt.active = true
+          AND COALESCE(s.qty, 0) <= 5
+    """)
+
+    return jsonify({
+        'date': str(today),
+        'revenue_today': float((revenue_today[0]['revenue'] if revenue_today else 0) or 0),
+        'revenue_month': float((revenue_month[0]['revenue'] if revenue_month else 0) or 0),
+        'orders_today': int((orders_today[0]['total'] if orders_today else 0) or 0),
+        'stock_value': float((stock_value[0]['value'] if stock_value else 0) or 0),
+        'low_stock_alerts': int((low_stock_count[0]['count'] if low_stock_count else 0) or 0),
+        'top_products_month': [{
+            'product': r['product'],
+            'qty_sold': float(r['qty_sold'] or 0),
+            'revenue': float(r['revenue'] or 0),
+        } for r in top_products],
+    })
+
+
+@app.route('/api/v1/stock/low')
+@mobile_api_required
+def mobile_low_stock():
+    threshold = int(request.args.get('threshold', 5))
+    rows = query("""
+        SELECT pp.id,
+               pt.name->>'en_US'  AS name,
+               COALESCE(s.qty, 0) AS qty_on_hand,
+               pt.list_price      AS sale_price
+        FROM product_product pp
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        LEFT JOIN (
+            SELECT sq.product_id, SUM(sq.quantity) AS qty
+            FROM stock_quant sq
+            JOIN stock_location sl ON sl.id = sq.location_id
+            WHERE sl.usage = 'internal'
+            GROUP BY sq.product_id
+        ) s ON s.product_id = pp.id
+        WHERE pt.type = 'consu' AND pt.active = true
+          AND COALESCE(s.qty, 0) <= %s
+        ORDER BY COALESCE(s.qty, 0) ASC
+        LIMIT 100
+    """, (threshold,))
+    results = [{
+        'id': int(r['id']),
+        'name': r['name'],
+        'qty_on_hand': float(r['qty_on_hand'] or 0),
+        'sale_price': float(r['sale_price'] or 0),
+    } for r in rows]
+    return jsonify({'threshold': threshold, 'count': len(results), 'offset': 0, 'results': results})
+
+
+@app.route('/api/v1/sales')
+@mobile_api_required
+def mobile_sales():
+    today = date.today()
+    date_from = request.args.get('date_from') or str(today.replace(day=1))
+    date_to = request.args.get('date_to') or str(today)
+    limit = min(int(request.args.get('limit', 30)), 100)
+    offset = int(request.args.get('offset', 0))
+    rows = query("""
+        SELECT so.id, so.name, so.date_order,
+               rp.name AS customer,
+               so.amount_total,
+               so.amount_tax,
+               so.state
+        FROM sale_order so
+        LEFT JOIN res_partner rp ON rp.id = so.partner_id
+        WHERE so.state IN ('sale','done')
+          AND so.date_order::date BETWEEN %s AND %s
+        ORDER BY so.date_order DESC
+        LIMIT %s OFFSET %s
+    """, (date_from, date_to, limit, offset))
+    return jsonify({
+        'count': len(rows),
+        'date_from': date_from,
+        'date_to': date_to,
+        'offset': offset,
+        'results': [{
+            'id': int(r['id']),
+            'name': r['name'],
+            'date_order': str(r['date_order']),
+            'customer': r['customer'],
+            'amount_total': float(r['amount_total'] or 0),
+            'amount_tax': float(r['amount_tax'] or 0),
+            'state': r['state'],
+        } for r in rows],
+    })
+
+
+@app.route('/api/v1/customers')
+@mobile_api_required
+def mobile_customers():
+    search = request.args.get('search')
+    like = f'%{search}%' if search else '%'
+    limit = min(int(request.args.get('limit', 50)), 200)
+    offset = int(request.args.get('offset', 0))
+    rows = query("""
+        SELECT rp.id, rp.name, rp.phone, rp.email, rp.street,
+               COUNT(so.id) AS total_orders,
+               COALESCE(SUM(so.amount_total), 0) AS total_spent
+        FROM res_partner rp
+        LEFT JOIN sale_order so ON so.partner_id = rp.id AND so.state IN ('sale','done')
+        WHERE rp.customer_rank > 0
+          AND rp.name ILIKE %s
+        GROUP BY rp.id
+        ORDER BY total_spent DESC
+        LIMIT %s OFFSET %s
+    """, (like, limit, offset))
+    return jsonify({
+        'count': len(rows),
+        'offset': offset,
+        'results': [{
+            'id': int(r['id']),
+            'name': r['name'],
+            'phone': r['phone'],
+            'email': r['email'],
+            'street': r['street'],
+            'total_orders': int(r['total_orders'] or 0),
+            'total_spent': float(r['total_spent'] or 0),
+        } for r in rows],
+    })
+
+
+def _owner_alert(notification_id, category, priority, title, body,
+                 metric_label=None, metric_value=None, action_label=None, route=None):
+    return {
+        'id': notification_id,
+        'category': category,
+        'priority': priority,
+        'title': title,
+        'body': body,
+        'metric_label': metric_label,
+        'metric_value': metric_value,
+        'action_label': action_label,
+        'route': route,
+        'created_at': date.today().isoformat(),
+    }
+
+
+@app.route('/api/v1/owner/notifications')
+@mobile_api_required
+def mobile_owner_notifications():
+    today = date.today()
+    month_from = today.replace(day=1)
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+    daily_target = MONTHLY_REVENUE_TARGET / days_in_month
+    expected_mtd = daily_target * today.day
+
+    dash = mobile_dashboard().get_json()
+    today_revenue = float(dash['revenue_today'])
+    month_revenue = float(dash['revenue_month'])
+
+    zero_stock = query("""
+        SELECT COUNT(DISTINCT pp.id) AS count
+        FROM product_product pp
+        JOIN product_template pt ON pt.id = pp.product_tmpl_id
+        LEFT JOIN (
+            SELECT sq.product_id, SUM(sq.quantity) AS qty
+            FROM stock_quant sq
+            JOIN stock_location sl ON sl.id = sq.location_id
+            WHERE sl.usage = 'internal'
+            GROUP BY sq.product_id
+        ) s ON s.product_id = pp.id
+        WHERE pt.type = 'consu' AND pt.active = true
+          AND COALESCE(s.qty, 0) <= 0
+    """)
+
+    unpaid = query("""
+        SELECT COUNT(*) AS count, COALESCE(SUM(am.amount_residual), 0) AS amount_due
+        FROM account_move am
+        WHERE am.move_type = 'out_invoice'
+          AND am.state = 'posted'
+          AND am.payment_state IN ('not_paid', 'partial')
+          AND am.amount_residual > 0
+    """)
+
+    alerts = []
+    zero_count = int((zero_stock[0]['count'] if zero_stock else 0) or 0)
+    low_count = int(dash['low_stock_alerts']) - zero_count
+    unpaid_count = int((unpaid[0]['count'] if unpaid else 0) or 0)
+    unpaid_total = float((unpaid[0]['amount_due'] if unpaid else 0) or 0)
+
+    if zero_count:
+        alerts.append(_owner_alert(
+            f'stock-zero-{today}', 'stock', 'critical',
+            f'{zero_count} products are out of stock',
+            'These can block sales today. Review the reorder list before checking slower items.',
+            'Out of stock', zero_count, 'Open stock', 'stock',
+        ))
+    if low_count > 0:
+        alerts.append(_owner_alert(
+            f'stock-low-{today}', 'stock', 'warning',
+            f'{low_count} products are running low',
+            'Keep fast-moving party items available before weekend and event demand picks up.',
+            'Low stock', low_count, 'Review stock', 'stock',
+        ))
+    if today_revenue < daily_target * 0.65:
+        alerts.append(_owner_alert(
+            f'target-daily-{today}', 'sales', 'warning',
+            'Today is behind the sales pace',
+            f'Today is at KES {today_revenue:,.0f} against a daily pace of KES {daily_target:,.0f}.',
+            'Today revenue', today_revenue, 'Check sales', 'sales',
+        ))
+    if expected_mtd and month_revenue < expected_mtd * 0.85:
+        gap = expected_mtd - month_revenue
+        alerts.append(_owner_alert(
+            f'target-month-{today}', 'target', 'warning',
+            'Month-to-date revenue is behind pace',
+            f'The shop is about KES {gap:,.0f} behind the monthly target pace.',
+            'Target gap', gap, 'Open dashboard', 'dashboard',
+        ))
+    if unpaid_count:
+        alerts.append(_owner_alert(
+            f'invoices-unpaid-{today}', 'cashflow',
+            'critical' if unpaid_total >= 50000 else 'warning',
+            f'{unpaid_count} customer invoices need follow-up',
+            f'Outstanding customer balance is KES {unpaid_total:,.0f}.',
+            'Amount due', unpaid_total, 'Review customers', 'customers',
+        ))
+
+    priority_order = {'critical': 0, 'warning': 1, 'info': 2}
+    alerts.sort(key=lambda n: (priority_order.get(n['priority'], 9), n['category'], n['title']))
+    return jsonify({
+        'date': str(today),
+        'count': len(alerts),
+        'critical_count': sum(1 for n in alerts if n['priority'] == 'critical'),
+        'warning_count': sum(1 for n in alerts if n['priority'] == 'warning'),
+        'results': alerts,
+    })
+
 
 @app.route('/switch-env/<env>')
 @login_required
