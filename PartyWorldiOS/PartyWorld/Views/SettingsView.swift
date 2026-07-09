@@ -16,9 +16,9 @@ struct SettingsView: View {
                         .autocorrectionDisabled()
 
                     HStack {
-                        Label(state.isSignedIn ? "Signed in" : "Demo mode", systemImage: state.isSignedIn ? "checkmark.circle.fill" : "sparkles")
+                        Label(state.isSignedIn ? "Signed in" : "Signed out", systemImage: state.isSignedIn ? "checkmark.circle.fill" : "person.crop.circle")
                         Spacer()
-                        Text(state.userName ?? "Preview")
+                        Text(state.userName ?? "No account")
                             .foregroundStyle(.secondary)
                     }
                 }

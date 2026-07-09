@@ -47,12 +47,12 @@ struct DashboardView: View {
                 .font(.subheadline)
                 .foregroundStyle(PWTheme.secondaryInk)
             HStack(spacing: 10) {
-                Label(state.isUsingDemoData ? "Demo view" : "Live data", systemImage: state.isUsingDemoData ? "sparkles" : "checkmark.circle.fill")
+                Label(state.hasLiveData ? "Live data" : "Not connected", systemImage: state.hasLiveData ? "checkmark.circle.fill" : "wifi.slash")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background((state.isUsingDemoData ? PWTheme.honey : PWTheme.mint).opacity(0.16))
-                    .foregroundStyle(state.isUsingDemoData ? PWTheme.honey : PWTheme.mint)
+                    .background((state.hasLiveData ? PWTheme.mint : PWTheme.honey).opacity(0.16))
+                    .foregroundStyle(state.hasLiveData ? PWTheme.mint : PWTheme.honey)
                     .clipShape(Capsule())
 
                 if let lastUpdated = state.lastUpdated {
@@ -67,7 +67,7 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var connectionBanner: some View {
-        if state.isUsingDemoData {
+        if state.hasLiveData == false {
             SoftCard {
                 HStack(alignment: .center, spacing: 14) {
                     Image(systemName: "lock.open.fill")
@@ -78,9 +78,9 @@ struct DashboardView: View {
                         .clipShape(Circle())
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Connect when the API is ready")
+                        Text("Sign in to load live data")
                             .font(.subheadline.weight(.semibold))
-                        Text(state.notice ?? "Live numbers will replace this preview.")
+                        Text(state.notice ?? "No business data is shown until the server responds.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -132,8 +132,16 @@ struct DashboardView: View {
     private var insights: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "Worth noticing")
-            ForEach(state.insightNotes) { note in
-                InsightRow(note: note)
+            if state.insightNotes.isEmpty {
+                EmptyStateView(
+                    symbol: state.hasLiveData ? "checkmark.seal.fill" : "wifi.slash",
+                    title: state.hasLiveData ? "Nothing unusual yet" : "Waiting for live data",
+                    message: state.hasLiveData ? "Owner notes will appear when something needs attention." : "Sign in or refresh after the API is available."
+                )
+            } else {
+                ForEach(state.insightNotes) { note in
+                    InsightRow(note: note)
+                }
             }
         }
     }
@@ -141,10 +149,18 @@ struct DashboardView: View {
     private var topProducts: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "Top products")
-            SoftCard {
-                VStack(spacing: 14) {
-                    ForEach(state.dashboard.topProductsMonth) { product in
-                        ProductBar(product: product, maxRevenue: state.dashboard.topProductsMonth.map(\.revenue).max() ?? 1)
+            if state.dashboard.topProductsMonth.isEmpty {
+                EmptyStateView(
+                    symbol: "chart.bar.xaxis",
+                    title: state.hasLiveData ? "No top products yet" : "Waiting for live data",
+                    message: state.hasLiveData ? "Top sellers will appear after confirmed sales are available." : "Live product performance will load after sign-in."
+                )
+            } else {
+                SoftCard {
+                    VStack(spacing: 14) {
+                        ForEach(state.dashboard.topProductsMonth) { product in
+                            ProductBar(product: product, maxRevenue: state.dashboard.topProductsMonth.map(\.revenue).max() ?? 1)
+                        }
                     }
                 }
             }

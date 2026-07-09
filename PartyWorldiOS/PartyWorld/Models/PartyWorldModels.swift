@@ -18,6 +18,16 @@ struct DashboardSnapshot: Codable, Equatable {
         case lowStockAlerts = "low_stock_alerts"
         case topProductsMonth = "top_products_month"
     }
+
+    static let empty = DashboardSnapshot(
+        date: "",
+        revenueToday: 0,
+        revenueMonth: 0,
+        ordersToday: 0,
+        stockValue: 0,
+        lowStockAlerts: 0,
+        topProductsMonth: []
+    )
 }
 
 struct TopProduct: Codable, Identifiable, Equatable {
@@ -174,80 +184,4 @@ struct InsightNote: Identifiable, Equatable {
     let body: String
     let tone: Tone
     let symbol: String
-}
-
-enum DemoData {
-    static let dashboard = DashboardSnapshot(
-        date: "2026-07-08",
-        revenueToday: 18450,
-        revenueMonth: 286700,
-        ordersToday: 12,
-        stockValue: 742300,
-        lowStockAlerts: 8,
-        topProductsMonth: [
-            TopProduct(product: "Number Balloons", qtySold: 96, revenue: 38400),
-            TopProduct(product: "Birthday Candles", qtySold: 74, revenue: 22200),
-            TopProduct(product: "Gift Bags", qtySold: 61, revenue: 20130),
-            TopProduct(product: "Foil Curtains", qtySold: 38, revenue: 19000),
-            TopProduct(product: "Confetti Poppers", qtySold: 33, revenue: 16500)
-        ]
-    )
-
-    static let lowStock = [
-        LowStockProduct(id: 1, name: "Gold Number 1 Balloon", qtyOnHand: 0, salePrice: 450),
-        LowStockProduct(id: 2, name: "Blue Curling Ribbon", qtyOnHand: 2, salePrice: 180),
-        LowStockProduct(id: 3, name: "Cake Topper Happy Birthday", qtyOnHand: 3, salePrice: 250),
-        LowStockProduct(id: 4, name: "Pastel Gift Bag Large", qtyOnHand: 5, salePrice: 330)
-    ]
-
-    static let sales = [
-        SaleOrder(id: 101, name: "SO1024", dateOrder: "2026-07-08 11:21:00", customer: "Walk-in Customer", amountTotal: 3650, amountTax: 0, state: "sale"),
-        SaleOrder(id: 102, name: "SO1023", dateOrder: "2026-07-08 10:42:00", customer: "Star Events", amountTotal: 12400, amountTax: 0, state: "sale"),
-        SaleOrder(id: 103, name: "SO1022", dateOrder: "2026-07-07 17:18:00", customer: "Faith Chepkoech", amountTotal: 2100, amountTax: 0, state: "done")
-    ]
-
-    static let customers = [
-        Customer(id: 201, name: "Star Events", phone: "+254 700 000 001", email: nil, street: "Nairobi", totalOrders: 9, totalSpent: 84200),
-        Customer(id: 202, name: "Walk-in Customer", phone: nil, email: nil, street: nil, totalOrders: 38, totalSpent: 137600),
-        Customer(id: 203, name: "Faith Chepkoech", phone: nil, email: nil, street: "Kamkunji", totalOrders: 5, totalSpent: 22650)
-    ]
-
-    static let ownerAlerts = [
-        OwnerAlert(
-            id: "demo-stock-zero",
-            category: "stock",
-            priority: .critical,
-            title: "2 products are out of stock",
-            body: "These can block sales today. Review the reorder list before checking slower items.",
-            metricLabel: "Out of stock",
-            metricValue: 2,
-            actionLabel: "Open stock",
-            route: "stock",
-            createdAt: "2026-07-08T09:00:00Z"
-        ),
-        OwnerAlert(
-            id: "demo-target-daily",
-            category: "sales",
-            priority: .warning,
-            title: "Today is behind the sales pace",
-            body: "Today is at KES 18,450 against a daily pace of about KES 25,800. Keep checking progress after lunch.",
-            metricLabel: "Today revenue",
-            metricValue: 18450,
-            actionLabel: "Check sales",
-            route: "sales",
-            createdAt: "2026-07-08T09:00:00Z"
-        ),
-        OwnerAlert(
-            id: "demo-invoices",
-            category: "cashflow",
-            priority: .info,
-            title: "Customer follow-up may help cash flow",
-            body: "A few customer balances are still open. Follow up while the orders are fresh.",
-            metricLabel: "Amount due",
-            metricValue: 12600,
-            actionLabel: "Review customers",
-            route: "customers",
-            createdAt: "2026-07-08T09:00:00Z"
-        )
-    ]
 }

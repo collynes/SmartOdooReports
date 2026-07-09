@@ -15,15 +15,15 @@ final class AppState {
     var userName: String? {
         didSet { UserDefaults.standard.set(userName, forKey: Keys.userName) }
     }
-    var dashboard = DemoData.dashboard
-    var lowStock = DemoData.lowStock
-    var sales = DemoData.sales
-    var customers = DemoData.customers
-    var ownerAlerts = DemoData.ownerAlerts
+    var dashboard = DashboardSnapshot.empty
+    var lowStock: [LowStockProduct] = []
+    var sales: [SaleOrder] = []
+    var customers: [Customer] = []
+    var ownerAlerts: [OwnerAlert] = []
     var isLoading = false
     var lastUpdated: Date?
     var notice: String?
-    var isUsingDemoData = true
+    var hasLiveData = false
     var notificationsEnabled = UserDefaults.standard.bool(forKey: Keys.notificationsEnabled) {
         didSet { UserDefaults.standard.set(notificationsEnabled, forKey: Keys.notificationsEnabled) }
     }
@@ -50,6 +50,8 @@ final class AppState {
     }
 
     var insightNotes: [InsightNote] {
+        guard hasLiveData else { return [] }
+
         var notes: [InsightNote] = []
 
         if dashboard.lowStockAlerts > 0 {
@@ -105,13 +107,8 @@ final class AppState {
     func signOut() {
         accessToken = nil
         userName = nil
-        isUsingDemoData = true
-        dashboard = DemoData.dashboard
-        lowStock = DemoData.lowStock
-        sales = DemoData.sales
-        customers = DemoData.customers
-        ownerAlerts = DemoData.ownerAlerts
-        notice = "Signed out. Demo data is showing."
+        resetBusinessData()
+        notice = "Signed out."
     }
 
     func enableOwnerNotifications() async {
@@ -121,8 +118,8 @@ final class AppState {
 
     func refresh() async {
         guard let baseURL, let accessToken else {
-            isUsingDemoData = true
-            notice = "Connect to the Party World API when the local stack is ready."
+            hasLiveData = false
+            notice = "Sign in to load live Party World data."
             return
         }
 
@@ -142,15 +139,27 @@ final class AppState {
             customers = try await customersResponse.results
             ownerAlerts = try await ownerAlertsResponse.results
             lastUpdated = Date()
-            isUsingDemoData = false
+            hasLiveData = true
             notice = "Updated just now."
             if notificationsEnabled {
                 await notificationCenter.postUrgentAlerts(ownerAlerts)
             }
         } catch {
-            isUsingDemoData = true
+            if lastUpdated == nil {
+                resetBusinessData()
+            }
             notice = error.localizedDescription
         }
+    }
+
+    private func resetBusinessData() {
+        dashboard = .empty
+        lowStock = []
+        sales = []
+        customers = []
+        ownerAlerts = []
+        hasLiveData = false
+        lastUpdated = nil
     }
 
     private enum Keys {

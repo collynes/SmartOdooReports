@@ -11,9 +11,9 @@ struct AlertsView: View {
 
                     if state.ownerAlerts.isEmpty {
                         EmptyStateView(
-                            symbol: "checkmark.seal.fill",
-                            title: "Nothing needs attention",
-                            message: "Stock, sales pace, cash flow, and expenses look calm."
+                            symbol: state.hasLiveData ? "checkmark.seal.fill" : "wifi.slash",
+                            title: state.hasLiveData ? "Nothing needs attention" : "Waiting for live data",
+                            message: state.hasLiveData ? "Stock, sales pace, cash flow, and expenses look calm." : "Owner alerts will load after sign-in."
                         )
                     } else {
                         ForEach(state.ownerAlerts) { alert in
@@ -55,7 +55,7 @@ struct AlertsView: View {
                     Text(summaryTitle(critical: critical, warning: warning))
                         .font(.headline)
                         .foregroundStyle(PWTheme.ink)
-                    Text(state.isUsingDemoData ? "Demo alerts are showing until live data connects." : "Updated from live Party World data.")
+                    Text(state.hasLiveData ? "Updated from live Party World data." : "No alerts are shown until live data loads.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -72,7 +72,7 @@ struct AlertsView: View {
         if warning > 0 {
             return "\(warning) item\(warning == 1 ? "" : "s") to watch"
         }
-        return "Everything looks calm"
+        return state.hasLiveData ? "Everything looks calm" : "No live alerts"
     }
 }
 
