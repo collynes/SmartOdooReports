@@ -30,7 +30,7 @@ APP_USERS = {
     os.getenv('APP_USERNAME', 'admin'): os.getenv('APP_PASSWORD', 'password'),
     'Admin': 'Party@2026!Admin',
 }
-MONTHLY_REVENUE_TARGET = float(os.getenv('MONTHLY_REVENUE_TARGET', '450000'))
+MONTHLY_REVENUE_TARGET = float(os.getenv('MONTHLY_REVENUE_TARGET', '800000'))
 
 DB_CONFIG = {
     'host':     os.getenv('DB_HOST', 'localhost'),

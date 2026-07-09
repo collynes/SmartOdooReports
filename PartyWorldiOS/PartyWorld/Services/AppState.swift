@@ -4,7 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class AppState {
-    static let monthlyRevenueTarget: Double = 450_000
+    static let monthlyRevenueTarget: Double = 800_000
 
     var baseURLText: String {
         didSet { UserDefaults.standard.set(baseURLText, forKey: Keys.baseURL) }

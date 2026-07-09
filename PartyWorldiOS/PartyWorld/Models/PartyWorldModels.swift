@@ -230,7 +230,7 @@ enum DemoData {
             category: "sales",
             priority: .warning,
             title: "Today is behind the sales pace",
-            body: "Today is at KES 18,450 against a daily pace of about KES 12,900. Keep checking progress after lunch.",
+            body: "Today is at KES 18,450 against a daily pace of about KES 25,800. Keep checking progress after lunch.",
             metricLabel: "Today revenue",
             metricValue: 18450,
             actionLabel: "Check sales",
