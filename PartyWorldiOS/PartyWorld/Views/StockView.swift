@@ -32,6 +32,7 @@ struct StockView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(PWTheme.background)
+            .refreshable { await state.refresh() }
             .navigationTitle("Stock")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

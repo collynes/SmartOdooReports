@@ -17,7 +17,19 @@ struct SalesView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(PWTheme.background)
+            .refreshable { await state.refresh() }
             .navigationTitle("Sales")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await state.refresh() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .disabled(state.isLoading)
+                    .accessibilityLabel("Refresh")
+                }
+            }
             .overlay {
                 if state.sales.isEmpty {
                     LiveDataEmptyState(

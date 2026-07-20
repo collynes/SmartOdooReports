@@ -59,7 +59,7 @@ struct SettingsView: View {
                 }
 
                 Section("Business") {
-                    InfoLine(title: "Monthly target", value: Currency.kes(AppState.monthlyRevenueTarget))
+                    InfoLine(title: "Monthly target", value: Currency.kes(state.monthlyRevenueTarget))
                     InfoLine(title: "Currency", value: "Kenyan Shilling")
                     InfoLine(title: "Location", value: "Star Shopping Mall")
                 }

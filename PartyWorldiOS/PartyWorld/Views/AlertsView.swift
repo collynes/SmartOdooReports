@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AlertsView: View {
     @Environment(AppState.self) private var state
+    let onSelectRoute: (String?) -> Void
 
     var body: some View {
         NavigationStack {
@@ -17,13 +18,14 @@ struct AlertsView: View {
                         )
                     } else {
                         ForEach(state.ownerAlerts) { alert in
-                            OwnerAlertRow(alert: alert)
+                            OwnerAlertRow(alert: alert, onSelectRoute: onSelectRoute)
                         }
                     }
                 }
                 .padding(18)
             }
             .background(PWTheme.background.ignoresSafeArea())
+            .refreshable { await state.refresh() }
             .navigationTitle("Owner Alerts")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -54,7 +56,7 @@ struct AlertsView: View {
                     Text(summaryTitle(critical: critical, warning: warning))
                         .font(.headline)
                         .foregroundStyle(PWTheme.ink)
-                    Text(state.hasLiveData ? "Updated from live Party World data." : "No alerts are shown until live data loads.")
+                    Text(summaryStatus)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -62,6 +64,11 @@ struct AlertsView: View {
                 Spacer()
             }
         }
+    }
+
+    private var summaryStatus: String {
+        if state.isDataStale { return "Refresh failed; these alerts may be out of date." }
+        return state.hasLiveData ? "Updated from live Party World data." : "No alerts are shown until live data loads."
     }
 
     private func summaryTitle(critical: Int, warning: Int) -> String {
@@ -77,6 +84,7 @@ struct AlertsView: View {
 
 private struct OwnerAlertRow: View {
     let alert: OwnerAlert
+    let onSelectRoute: (String?) -> Void
 
     var body: some View {
         SoftCard {
@@ -125,7 +133,12 @@ private struct OwnerAlertRow: View {
                     Spacer()
 
                     if let actionLabel = alert.actionLabel {
-                        Label(actionLabel, systemImage: "arrow.right.circle.fill")
+                        Button {
+                            onSelectRoute(alert.route)
+                        } label: {
+                            Label(actionLabel, systemImage: "arrow.right.circle.fill")
+                        }
+                        .buttonStyle(.plain)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(tint)
                     }

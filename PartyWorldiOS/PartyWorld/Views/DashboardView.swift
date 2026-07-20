@@ -16,13 +16,16 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     hero
                     connectionBanner
-                    ownerSnapshot
-                    insights
-                    topProducts
+                    if state.hasLiveData {
+                        kpis
+                        targetCard
+                        topProducts
+                    }
                 }
                 .padding(18)
             }
             .background(PWTheme.background.ignoresSafeArea())
+            .refreshable { await state.refresh() }
             .navigationTitle("Party World")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -47,35 +50,21 @@ struct DashboardView: View {
         }
     }
 
-    @ViewBuilder
-    private var ownerSnapshot: some View {
-        if state.hasLiveData {
-            kpis
-            targetCard
-        } else {
-            EmptyStateView(
-                symbol: "chart.line.uptrend.xyaxis",
-                title: "Your owner snapshot is ready when you sign in",
-                message: "Revenue, orders, stock value, and target progress stay hidden until live data loads."
-            )
-        }
-    }
-
     private var hero: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Good day\(state.userName.map { ", \($0)" } ?? "")")
                 .font(.title2.weight(.bold))
                 .foregroundStyle(PWTheme.ink)
-            Text("Here is what changed in the shop today.")
+            Text("Your current shop snapshot.")
                 .font(.subheadline)
                 .foregroundStyle(PWTheme.secondaryInk)
             HStack(spacing: 10) {
-                Label(state.hasLiveData ? "Live data" : "Not connected", systemImage: state.hasLiveData ? "checkmark.circle.fill" : "wifi.slash")
+                Label(connectionLabel, systemImage: connectionSymbol)
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background((state.hasLiveData ? PWTheme.mint : PWTheme.honey).opacity(0.16))
-                    .foregroundStyle(state.hasLiveData ? PWTheme.mint : PWTheme.honey)
+                    .background(connectionTint.opacity(0.16))
+                    .foregroundStyle(connectionTint)
                     .clipShape(Capsule())
 
                 if let lastUpdated = state.lastUpdated {
@@ -90,26 +79,34 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var connectionBanner: some View {
-        if state.hasLiveData == false {
+        if state.hasLiveData == false || state.isDataStale {
             SoftCard {
-                HStack(alignment: .center, spacing: 14) {
-                    IconBadge(symbol: "lock.open.fill", tint: PWTheme.sky, size: 34)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 12) {
+                        IconBadge(symbol: state.isDataStale ? "exclamationmark.arrow.triangle.2.circlepath" : "lock.fill", tint: state.isDataStale ? PWTheme.honey : PWTheme.sky, size: 34)
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Sign in to load live data")
-                            .font(.subheadline.weight(.semibold))
-                        Text(state.notice ?? "No business data is shown until the server responds.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(state.isDataStale ? "Showing an older snapshot" : "Sign in to load live data")
+                                .font(.subheadline.weight(.semibold))
+                            Text(state.notice ?? "No business data is shown until the server responds.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
 
-                    Spacer()
-
-                    Button("Sign in") {
-                        showingSignIn = true
+                    Button {
+                        if state.isSignedIn {
+                            Task { await state.refresh() }
+                        } else {
+                            showingSignIn = true
+                        }
+                    } label: {
+                        Text(state.isSignedIn ? "Retry" : "Sign in")
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .controlSize(.large)
                 }
             }
         }
@@ -140,11 +137,25 @@ struct DashboardView: View {
                     .tint(PWTheme.coral)
                     .scaleEffect(x: 1, y: 1.4, anchor: .center)
 
-                Text("\(Currency.kes(state.dashboard.revenueMonth)) of \(Currency.kes(AppState.monthlyRevenueTarget))")
+                Text("\(Currency.kes(state.dashboard.revenueMonth)) of \(Currency.kes(state.monthlyRevenueTarget))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var connectionLabel: String {
+        if state.isDataStale { return "Update failed" }
+        return state.hasLiveData ? "Live data" : "Not connected"
+    }
+
+    private var connectionSymbol: String {
+        if state.isDataStale { return "exclamationmark.triangle.fill" }
+        return state.hasLiveData ? "checkmark.circle.fill" : "wifi.slash"
+    }
+
+    private var connectionTint: Color {
+        state.isDataStale ? PWTheme.honey : (state.hasLiveData ? PWTheme.mint : PWTheme.honey)
     }
 
     private var insights: some View {

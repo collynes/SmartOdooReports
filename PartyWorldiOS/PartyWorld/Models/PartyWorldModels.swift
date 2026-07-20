@@ -8,6 +8,7 @@ struct DashboardSnapshot: Codable, Equatable {
     let stockValue: Double
     let lowStockAlerts: Int
     let topProductsMonth: [TopProduct]
+    let monthlyRevenueTarget: Double?
 
     enum CodingKeys: String, CodingKey {
         case date
@@ -17,6 +18,7 @@ struct DashboardSnapshot: Codable, Equatable {
         case stockValue = "stock_value"
         case lowStockAlerts = "low_stock_alerts"
         case topProductsMonth = "top_products_month"
+        case monthlyRevenueTarget = "monthly_revenue_target"
     }
 
     static let empty = DashboardSnapshot(
@@ -26,7 +28,8 @@ struct DashboardSnapshot: Codable, Equatable {
         ordersToday: 0,
         stockValue: 0,
         lowStockAlerts: 0,
-        topProductsMonth: []
+        topProductsMonth: [],
+        monthlyRevenueTarget: nil
     )
 }
 

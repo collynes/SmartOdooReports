@@ -24,4 +24,16 @@ targets:
         SUPPORTS_MACCATALYST: false
         GENERATE_INFOPLIST_FILE: false
     scheme:
-      testTargets: []
+      testTargets:
+        - PartyWorldTests
+  PartyWorldTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - PartyWorldTests
+    dependencies:
+      - target: PartyWorld
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.partyworld.insights.tests
+        GENERATE_INFOPLIST_FILE: true

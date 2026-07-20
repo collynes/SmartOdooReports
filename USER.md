@@ -10,8 +10,8 @@ For full operational context, server details, people, expense rules, Odoo IDs, a
 
 ## 1. Quick Start
 
-**URL:** http://localhost:1989 (local Mac) · http://3.78.133.72:1989 (server)
-**Login:** `admin` / `admin`
+**URL:** http://localhost:1989 (local Mac) · the configured HTTPS reports URL (server)
+**Login:** Use credentials configured through `APP_USERNAME` and `APP_PASSWORD`.
 
 Before anything else, make sure the DB is up:
 - **Local Mac:** Docker Desktop must be running. Container `odoo18_backup-db-1` must be started.

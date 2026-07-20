@@ -5,6 +5,7 @@ enum APIError: LocalizedError {
     case unauthorized
     case badResponse(Int)
     case noToken
+    case insecureConnection
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ enum APIError: LocalizedError {
             "The server returned status \(status)."
         case .noToken:
             "No access token is saved."
+        case .insecureConnection:
+            "A secure HTTPS server address is required."
         }
     }
 }
@@ -65,6 +68,10 @@ struct APIClient: Sendable {
     }
 
     private func makeRequest(baseURL: URL, path: String, token: String?) throws -> URLRequest {
+        let isLocal = baseURL.host == "localhost" || baseURL.host == "127.0.0.1"
+        guard baseURL.scheme == "https" || (baseURL.scheme == "http" && isLocal) else {
+            throw APIError.insecureConnection
+        }
         guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
             throw APIError.invalidURL
         }

@@ -10,7 +10,7 @@ The app is intentionally calm, warm, and operational: it opens on a useful KPI s
 2. Select the `PartyWorld` scheme.
 3. Run on an iPhone simulator or device.
 
-The default API base URL is `http://3.78.133.72:1989`, matching the live Reports webapp. You can change it in Settings inside the app.
+The default API base URL is `https://partyworld.co.ke`. Production must reverse-proxy the mobile routes to the reports service over HTTPS. Local development may use `http://localhost:1989`; other insecure HTTP addresses are intentionally rejected by the app.
 
 ## Backend
 

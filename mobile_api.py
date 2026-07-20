@@ -12,8 +12,10 @@ from typing import Optional
 import psycopg2
 import psycopg2.extras
 import os
+import secrets
 from datetime import datetime, timedelta
 import calendar
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha512
@@ -21,19 +23,24 @@ from passlib.hash import pbkdf2_sha512
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # ── Config ──────────────────────────────────────────────────────
-SECRET_KEY   = os.getenv('SECRET_KEY', 'changeme')
+SECRET_KEY   = os.getenv('SECRET_KEY', '')
+if not SECRET_KEY or SECRET_KEY == 'changeme':
+    SECRET_KEY = secrets.token_urlsafe(48)
+    print('WARNING: SECRET_KEY is not configured; mobile tokens will reset on restart')
 ALGORITHM    = 'HS256'
 TOKEN_EXPIRE = 30  # days
 
 ODOO_URL = os.getenv('ODOO_URL', 'http://localhost:8069')
 ODOO_DB  = os.getenv('DB_NAME', 'odoo18')
 MONTHLY_REVENUE_TARGET = float(os.getenv('MONTHLY_REVENUE_TARGET', '800000'))
+SHOP_TIMEZONE = ZoneInfo(os.getenv('SHOP_TIMEZONE', 'Africa/Nairobi'))
+SHOP_OPEN_HOUR = int(os.getenv('SHOP_OPEN_HOUR', '9'))
+SHOP_CLOSE_HOUR = int(os.getenv('SHOP_CLOSE_HOUR', '19'))
 
 # Webapp users from .env — these also work as mobile login (mapped to Odoo admin)
-WEBAPP_USERS = {
-    os.getenv('APP_USERNAME', ''): os.getenv('APP_PASSWORD', ''),
-    'Admin': 'Party@2026!Admin',
-}
+WEBAPP_USERS = {}
+if os.getenv('APP_USERNAME') and os.getenv('APP_PASSWORD'):
+    WEBAPP_USERS[os.environ['APP_USERNAME']] = os.environ['APP_PASSWORD']
 
 DB_CONFIG = {
     'host':     os.getenv('DB_HOST', 'localhost'),
@@ -198,7 +205,7 @@ def me(user=Depends(current_user)):
 # ════════════════════════════════════════════════════════════════
 @app.get('/api/v1/dashboard', tags=['Dashboard'], summary='KPI snapshot')
 def dashboard(user=Depends(current_user)):
-    today      = datetime.today().date()
+    today      = datetime.now(SHOP_TIMEZONE).date()
     month_from = today.replace(day=1)
 
     revenue_today = query_one("""
@@ -206,22 +213,23 @@ def dashboard(user=Depends(current_user)):
         FROM sale_order so
         JOIN sale_order_line sol ON sol.order_id = so.id
         WHERE so.state IN ('sale','done')
-          AND so.date_order::date = %s
-    """, (today,))
+          AND (so.date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date = %s
+    """, (str(SHOP_TIMEZONE), today))
 
     revenue_month = query_one("""
         SELECT COALESCE(SUM(sol.price_subtotal), 0) AS revenue
         FROM sale_order so
         JOIN sale_order_line sol ON sol.order_id = so.id
         WHERE so.state IN ('sale','done')
-          AND so.date_order::date BETWEEN %s AND %s
-    """, (month_from, today))
+          AND (so.date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date BETWEEN %s AND %s
+    """, (str(SHOP_TIMEZONE), month_from, today))
 
     orders_today = query_one("""
         SELECT COUNT(*) AS total
         FROM sale_order
-        WHERE state IN ('sale','done') AND date_order::date = %s
-    """, (today,))
+        WHERE state IN ('sale','done')
+          AND (date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date = %s
+    """, (str(SHOP_TIMEZONE), today))
 
     stock_value = query_one("""
         SELECT COALESCE(SUM(sq.quantity * (pp.standard_price->>'1')::numeric), 0) AS value
@@ -239,11 +247,11 @@ def dashboard(user=Depends(current_user)):
         JOIN product_product pp ON pp.id = sol.product_id
         JOIN product_template pt ON pt.id = pp.product_tmpl_id
         WHERE so.state IN ('sale','done')
-          AND so.date_order::date BETWEEN %s AND %s
+          AND (so.date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date BETWEEN %s AND %s
         GROUP BY pt.name
         ORDER BY revenue DESC
         LIMIT 5
-    """, (month_from, today))
+    """, (str(SHOP_TIMEZONE), month_from, today))
 
     low_stock_count = query_one("""
         SELECT COUNT(DISTINCT pp.id) AS count
@@ -262,6 +270,7 @@ def dashboard(user=Depends(current_user)):
 
     return {
         'date': str(today),
+        'monthly_revenue_target': MONTHLY_REVENUE_TARGET,
         'revenue_today':    float(revenue_today['revenue']),
         'revenue_month':    float(revenue_month['revenue']),
         'orders_today':     int(orders_today['total']),
@@ -402,9 +411,9 @@ def sales(
     user=Depends(current_user),
 ):
     if not date_from:
-        date_from = str(datetime.today().date().replace(day=1))
+        date_from = str(datetime.now(SHOP_TIMEZONE).date().replace(day=1))
     if not date_to:
-        date_to = str(datetime.today().date())
+        date_to = str(datetime.now(SHOP_TIMEZONE).date())
 
     rows = query("""
         SELECT so.id, so.name, so.date_order,
@@ -415,10 +424,10 @@ def sales(
         FROM sale_order so
         LEFT JOIN res_partner rp ON rp.id = so.partner_id
         WHERE so.state IN ('sale','done')
-          AND so.date_order::date BETWEEN %s AND %s
+          AND (so.date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date BETWEEN %s AND %s
         ORDER BY so.date_order DESC
         LIMIT %s OFFSET %s
-    """, (date_from, date_to, limit, offset))
+    """, (str(SHOP_TIMEZONE), date_from, date_to, limit, offset))
     return {'count': len(rows), 'date_from': date_from, 'date_to': date_to,
             'offset': offset, 'results': rows}
 
@@ -572,7 +581,7 @@ def expenses(
         LEFT JOIN res_partner rp ON rp.id = am.partner_id
         WHERE am.move_type = 'in_invoice'
           AND am.invoice_date BETWEEN %s AND %s
-          AND am.state != 'cancel'
+          AND am.state = 'posted'
         ORDER BY am.invoice_date DESC
     """, (date_from, date_to))
 
@@ -613,11 +622,16 @@ def _owner_notification(
 @app.get('/api/v1/owner/notifications', response_model=OwnerNotificationsResponse,
          tags=['Owner'], summary='Owner alerts: stock, target pace, invoices, expenses')
 def owner_notifications(user=Depends(current_user)):
-    today = datetime.today().date()
+    now = datetime.now(SHOP_TIMEZONE)
+    today = now.date()
     month_from = today.replace(day=1)
     days_in_month = calendar.monthrange(today.year, today.month)[1]
     daily_target = MONTHLY_REVENUE_TARGET / days_in_month if days_in_month else 0
-    expected_mtd = daily_target * today.day
+    business_hours = max(SHOP_CLOSE_HOUR - SHOP_OPEN_HOUR, 1)
+    elapsed_hours = min(max(now.hour + now.minute / 60 - SHOP_OPEN_HOUR, 0), business_hours)
+    elapsed_share = elapsed_hours / business_hours
+    expected_now = daily_target * elapsed_share
+    expected_mtd = daily_target * ((today.day - 1) + elapsed_share)
 
     revenue_today = query_one("""
         SELECT COALESCE(SUM(sol.price_subtotal), 0) AS revenue
@@ -673,13 +687,14 @@ def owner_notifications(user=Depends(current_user)):
           AND am.state = 'posted'
           AND am.payment_state IN ('not_paid', 'partial')
           AND am.amount_residual > 0
-    """)
+          AND am.invoice_date_due < %s
+    """, (today,))
 
     month_expenses = query_one("""
         SELECT COALESCE(SUM(am.amount_total), 0) AS total
         FROM account_move am
         WHERE am.move_type = 'in_invoice'
-          AND am.state != 'cancel'
+          AND am.state = 'posted'
           AND am.invoice_date BETWEEN %s AND %s
     """, (month_from, today))
 
@@ -718,13 +733,13 @@ def owner_notifications(user=Depends(current_user)):
             route='stock',
         ))
 
-    if daily_target and today_revenue < daily_target * 0.65:
+    if elapsed_share >= 0.4 and today_revenue < expected_now * 0.65:
         alerts.append(_owner_notification(
             notification_id=f'target-daily-{today}',
             category='sales',
             priority='warning',
             title='Today is behind the sales pace',
-            body=f'Today is at KES {today_revenue:,.0f} against a daily pace of KES {daily_target:,.0f}.',
+            body=f'Today is at KES {today_revenue:,.0f} against an expected KES {expected_now:,.0f} by now.',
             metric_label='Today revenue',
             metric_value=today_revenue,
             action_label='Check sales',

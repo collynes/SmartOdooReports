@@ -32,7 +32,19 @@ struct CustomersView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(PWTheme.background)
+            .refreshable { await state.refresh() }
             .navigationTitle("Customers")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await state.refresh() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .disabled(state.isLoading)
+                    .accessibilityLabel("Refresh")
+                }
+            }
         }
     }
 }

@@ -14,6 +14,7 @@
 		39BB472D8AEEF1AAFD74F55B /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D556818D042E528196E1359 /* APIClient.swift */; };
 		3EAB025C18FC0082D468D139 /* NotificationCenterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DCFF6AC9D10D99A22033905 /* NotificationCenterService.swift */; };
 		576AA00DD284DCEBADA89BF3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A928B43BA836CAE710247310 /* SettingsView.swift */; };
+		911CBDBA6013C55CDF7A0388 /* PartyWorldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D77D15B7C014C18CCB6D4F /* PartyWorldTests.swift */; };
 		9157682130F3CED223C6A295 /* StockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1862866C1FBA042F1B715FA7 /* StockView.swift */; };
 		92A3BC0FD8F1767C3687249D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E47A0AAA0373BAF76D4FE97C /* RootView.swift */; };
 		996C02B0A95D4332F33DA7AC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9EECB8377ACC1985F382AF2 /* Assets.xcassets */; };
@@ -22,7 +23,18 @@
 		D222004BC74EF19241C64B7C /* PWTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 527D127BA020A657753A25BB /* PWTheme.swift */; };
 		D68EC30EA7DF010979693D26 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348D442520AEC6DFB2E61436 /* SignInView.swift */; };
 		DD7091D28E3A850F76248078 /* PartyWorldApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD02D84019F9B6FCC1736C58 /* PartyWorldApp.swift */; };
+		F19F3F44747185FA8EAAD433 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 789559DA19F52D164FC1A2AB /* KeychainStore.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9B0A2B0259D5A661092B028F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D3A4CD490CBE861AE7844E91 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F5CE7CEA5A771A62C8D67660;
+			remoteInfo = PartyWorld;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		0CA6A5B3C5C50366FE97FF6D /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -33,6 +45,8 @@
 		35B52C5078EEE4B30D09AC0E /* AlertsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsView.swift; sourceTree = "<group>"; };
 		527D127BA020A657753A25BB /* PWTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PWTheme.swift; sourceTree = "<group>"; };
 		5D556818D042E528196E1359 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		789559DA19F52D164FC1A2AB /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		858B96F4915B3618C7681E23 /* PartyWorldTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PartyWorldTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		86BB28090ECE2F0316D0AFFF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		8F87D37650E20CFC31F158F6 /* PartyWorld.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PartyWorld.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A104153745B84C1DE08EB99D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -40,6 +54,7 @@
 		A9EECB8377ACC1985F382AF2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AD02D84019F9B6FCC1736C58 /* PartyWorldApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartyWorldApp.swift; sourceTree = "<group>"; };
 		BAA059A56DE7C8EE9E2B1C1D /* SalesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalesView.swift; sourceTree = "<group>"; };
+		D9D77D15B7C014C18CCB6D4F /* PartyWorldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartyWorldTests.swift; sourceTree = "<group>"; };
 		E47A0AAA0373BAF76D4FE97C /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		EFA5892CE5E824F6B419AE25 /* PartyWorldModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartyWorldModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -50,6 +65,7 @@
 			children = (
 				5D556818D042E528196E1359 /* APIClient.swift */,
 				86BB28090ECE2F0316D0AFFF /* AppState.swift */,
+				789559DA19F52D164FC1A2AB /* KeychainStore.swift */,
 				1DCFF6AC9D10D99A22033905 /* NotificationCenterService.swift */,
 			);
 			path = Services;
@@ -89,6 +105,7 @@
 			isa = PBXGroup;
 			children = (
 				8F87D37650E20CFC31F158F6 /* PartyWorld.app */,
+				858B96F4915B3618C7681E23 /* PartyWorldTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -112,8 +129,17 @@
 			isa = PBXGroup;
 			children = (
 				610006C5C1BAFF3BFA56065B /* PartyWorld */,
+				D81D321767FEF4E8F5218DA7 /* PartyWorldTests */,
 				725B1968D07C8186E1918D4B /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		D81D321767FEF4E8F5218DA7 /* PartyWorldTests */ = {
+			isa = PBXGroup;
+			children = (
+				D9D77D15B7C014C18CCB6D4F /* PartyWorldTests.swift */,
+			);
+			path = PartyWorldTests;
 			sourceTree = "<group>";
 		};
 		D88DAF0756BCAC6176AB8BD8 /* Design */ = {
@@ -127,6 +153,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		04E94A45EFDF0AC51B026553 /* PartyWorldTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4290451C178D583DD941DF57 /* Build configuration list for PBXNativeTarget "PartyWorldTests" */;
+			buildPhases = (
+				2EE07535B62DB1529536B26B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				99B879E54C1527174820730F /* PBXTargetDependency */,
+			);
+			name = PartyWorldTests;
+			packageProductDependencies = (
+			);
+			productName = PartyWorldTests;
+			productReference = 858B96F4915B3618C7681E23 /* PartyWorldTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		F5CE7CEA5A771A62C8D67660 /* PartyWorld */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A4A7A9E9E85D50417E57C7D2 /* Build configuration list for PBXNativeTarget "PartyWorld" */;
@@ -171,6 +215,7 @@
 			projectRoot = "";
 			targets = (
 				F5CE7CEA5A771A62C8D67660 /* PartyWorld */,
+				04E94A45EFDF0AC51B026553 /* PartyWorldTests */,
 			);
 		};
 /* End PBXProject section */
@@ -187,6 +232,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2EE07535B62DB1529536B26B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				911CBDBA6013C55CDF7A0388 /* PartyWorldTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E9D0304B90B17BCB85A57233 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -196,6 +249,7 @@
 				2718DDB812EB5D5370F2A39D /* AppState.swift in Sources */,
 				21888AEF7626A970B75F2E4F /* CustomersView.swift in Sources */,
 				2DDB77E5BCEE181E0D314E4F /* DashboardView.swift in Sources */,
+				F19F3F44747185FA8EAAD433 /* KeychainStore.swift in Sources */,
 				3EAB025C18FC0082D468D139 /* NotificationCenterService.swift in Sources */,
 				D222004BC74EF19241C64B7C /* PWTheme.swift in Sources */,
 				DD7091D28E3A850F76248078 /* PartyWorldApp.swift in Sources */,
@@ -209,6 +263,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		99B879E54C1527174820730F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F5CE7CEA5A771A62C8D67660 /* PartyWorld */;
+			targetProxy = 9B0A2B0259D5A661092B028F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1B1F412AC87C471C7862E496 /* Debug */ = {
@@ -352,6 +414,23 @@
 			};
 			name = Release;
 		};
+		BB2DAB0E3709B7BFBAF03E48 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.partyworld.insights.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PartyWorld.app/PartyWorld";
+			};
+			name = Debug;
+		};
 		EC9602EFCF63ACA99F20CFE4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -370,9 +449,35 @@
 			};
 			name = Debug;
 		};
+		F5FD91B4FD3048E03AA0A669 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.partyworld.insights.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PartyWorld.app/PartyWorld";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		4290451C178D583DD941DF57 /* Build configuration list for PBXNativeTarget "PartyWorldTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB2DAB0E3709B7BFBAF03E48 /* Debug */,
+				F5FD91B4FD3048E03AA0A669 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		4AB0DE74D5C0AFF40B346499 /* Build configuration list for PBXProject "PartyWorld" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

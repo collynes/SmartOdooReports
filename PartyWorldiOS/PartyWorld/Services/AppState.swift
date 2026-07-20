@@ -4,13 +4,13 @@ import Observation
 @MainActor
 @Observable
 final class AppState {
-    static let monthlyRevenueTarget: Double = 800_000
+    static let fallbackMonthlyRevenueTarget: Double = 800_000
 
     var baseURLText: String {
         didSet { UserDefaults.standard.set(baseURLText, forKey: Keys.baseURL) }
     }
     var accessToken: String? {
-        didSet { UserDefaults.standard.set(accessToken, forKey: Keys.accessToken) }
+        didSet { keychain.set(accessToken, for: Keys.accessToken) }
     }
     var userName: String? {
         didSet { UserDefaults.standard.set(userName, forKey: Keys.userName) }
@@ -24,17 +24,20 @@ final class AppState {
     var lastUpdated: Date?
     var notice: String?
     var hasLiveData = false
+    var isDataStale = false
     var notificationsEnabled = UserDefaults.standard.bool(forKey: Keys.notificationsEnabled) {
         didSet { UserDefaults.standard.set(notificationsEnabled, forKey: Keys.notificationsEnabled) }
     }
 
     private let api = APIClient()
     private let notificationCenter = NotificationCenterService()
+    private let keychain = KeychainStore()
 
     init() {
-        self.baseURLText = UserDefaults.standard.string(forKey: Keys.baseURL) ?? "http://3.78.133.72:1989"
-        self.accessToken = UserDefaults.standard.string(forKey: Keys.accessToken)
+        self.baseURLText = UserDefaults.standard.string(forKey: Keys.baseURL) ?? "https://partyworld.co.ke"
+        self.accessToken = KeychainStore().string(for: Keys.accessToken)
         self.userName = UserDefaults.standard.string(forKey: Keys.userName)
+        UserDefaults.standard.removeObject(forKey: Keys.accessToken)
     }
 
     var isSignedIn: Bool {
@@ -46,7 +49,11 @@ final class AppState {
     }
 
     var monthlyTargetProgress: Double {
-        min(dashboard.revenueMonth / Self.monthlyRevenueTarget, 1)
+        min(dashboard.revenueMonth / monthlyRevenueTarget, 1)
+    }
+
+    var monthlyRevenueTarget: Double {
+        dashboard.monthlyRevenueTarget ?? Self.fallbackMonthlyRevenueTarget
     }
 
     var insightNotes: [InsightNote] {
@@ -63,11 +70,11 @@ final class AppState {
             ))
         }
 
-        let remaining = max(Self.monthlyRevenueTarget - dashboard.revenueMonth, 0)
+        let remaining = max(monthlyRevenueTarget - dashboard.revenueMonth, 0)
         if remaining > 0 {
             notes.append(InsightNote(
                 title: "\(Currency.kes(remaining)) left for the monthly target",
-                body: "The shop is \(Int(monthlyTargetProgress * 100))% of the way to \(Currency.kes(Self.monthlyRevenueTarget)).",
+                body: "The shop is \(Int(monthlyTargetProgress * 100))% of the way to \(Currency.kes(monthlyRevenueTarget)).",
                 tone: .helpful,
                 symbol: "target"
             ))
@@ -119,7 +126,7 @@ final class AppState {
     func refresh() async {
         guard let baseURL, let accessToken else {
             hasLiveData = false
-            notice = "Sign in to load live Party World data."
+            notice = "Sales, stock, customers, and owner alerts will appear here."
             return
         }
 
@@ -138,8 +145,24 @@ final class AppState {
         } catch {
             if lastUpdated == nil {
                 resetBusinessData()
+            } else {
+                isDataStale = true
+            }
+            if case APIError.unauthorized = error {
+                self.accessToken = nil
+                self.userName = nil
             }
             notice = error.localizedDescription
+        }
+    }
+
+    func refreshIfNeeded(maxAge: TimeInterval = 300) async {
+        guard let lastUpdated else {
+            await refresh()
+            return
+        }
+        if Date().timeIntervalSince(lastUpdated) >= maxAge {
+            await refresh()
         }
     }
 
@@ -168,6 +191,7 @@ final class AppState {
     private func markRefreshComplete() {
         lastUpdated = Date()
         hasLiveData = true
+        isDataStale = false
         notice = "Updated just now."
         if notificationsEnabled {
             Task { await notificationCenter.postUrgentAlerts(ownerAlerts) }
@@ -181,6 +205,7 @@ final class AppState {
         customers = []
         ownerAlerts = []
         hasLiveData = false
+        isDataStale = false
         lastUpdated = nil
     }
 

@@ -120,8 +120,8 @@ For dev/architecture patterns see `CLAUDE.md`. For day-to-day webapp usage see `
 ### Quick Access
 | Environment | URL | Login |
 |---|---|---|
-| Local | http://localhost:1989 | admin / admin |
-| Server | http://3.78.133.72:1989 | admin / admin |
+| Local | http://localhost:1989 | Credentials from local `.env` |
+| Server | Configured HTTPS reports URL | Credentials from server environment |
 
 ### Stack
 | Layer | Technology |

@@ -67,7 +67,7 @@ services:
       DB_USER: odoo18
       DB_PASSWORD: odoo18
       APP_USERNAME: ${APP_USERNAME:-admin}
-      APP_PASSWORD: ${APP_PASSWORD:-Party@2026!Admin}
+      APP_PASSWORD: ${APP_PASSWORD:?APP_PASSWORD must be set}
       SECRET_KEY: ${SECRET_KEY:-changeme-replace-with-openssl-rand-hex-32}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

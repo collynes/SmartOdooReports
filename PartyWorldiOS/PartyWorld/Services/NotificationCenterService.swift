@@ -17,8 +17,13 @@ struct NotificationCenterService: Sendable {
             return
         }
 
+        let center = UNUserNotificationCenter.current()
+        let delivered = await center.deliveredNotifications()
+        let deliveredIDs = Set(delivered.map(\.request.identifier))
         await setBadge(urgent.count)
         for alert in urgent {
+            let identifier = "owner-alert-\(alert.id)"
+            guard deliveredIDs.contains(identifier) == false else { continue }
             let content = UNMutableNotificationContent()
             content.title = alert.title
             content.body = alert.body
@@ -27,7 +32,7 @@ struct NotificationCenterService: Sendable {
             content.userInfo = ["route": alert.route ?? ""]
 
             let request = UNNotificationRequest(
-                identifier: "owner-alert-\(alert.id)",
+                identifier: identifier,
                 content: content,
                 trigger: nil
             )

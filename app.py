@@ -1,12 +1,13 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, stream_with_context, g
 from functools import wraps
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 import psycopg2
 import psycopg2.extras
 import os, io, json, sys
 import subprocess
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import calendar
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from insights import get_daily_insight
 from projections import get_projections
@@ -25,12 +26,15 @@ if not _secret or _secret == 'changeme':
     print("⚠️  WARNING: SECRET_KEY not set or is default. Using a random key (sessions won't persist across restarts). Set SECRET_KEY in .env")
 app.secret_key = _secret
 
-# Multi-user credentials
-APP_USERS = {
-    os.getenv('APP_USERNAME', 'admin'): os.getenv('APP_PASSWORD', 'password'),
-    'Admin': 'Party@2026!Admin',
-}
+# Reports credentials are optional; Odoo credentials are also accepted by the
+# mobile login endpoint. Never fall back to a known production password.
+APP_USERS = {}
+if os.getenv('APP_USERNAME') and os.getenv('APP_PASSWORD'):
+    APP_USERS[os.environ['APP_USERNAME']] = os.environ['APP_PASSWORD']
 MONTHLY_REVENUE_TARGET = float(os.getenv('MONTHLY_REVENUE_TARGET', '800000'))
+SHOP_TIMEZONE = ZoneInfo(os.getenv('SHOP_TIMEZONE', 'Africa/Nairobi'))
+SHOP_OPEN_HOUR = int(os.getenv('SHOP_OPEN_HOUR', '9'))
+SHOP_CLOSE_HOUR = int(os.getenv('SHOP_CLOSE_HOUR', '19'))
 
 DB_CONFIG = {
     'host':     os.getenv('DB_HOST', 'localhost'),
@@ -84,6 +88,23 @@ def query(sql, params=None):
     except Exception as e:
         print(f"DB Error: {e}")
         return []
+
+def mobile_query(sql, params=None):
+    """Strict mobile query using one connection for the whole request."""
+    if 'mobile_db' not in g:
+        g.mobile_db = get_db()
+    cur = g.mobile_db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(sql, params)
+        return cur.fetchall()
+    finally:
+        cur.close()
+
+@app.teardown_appcontext
+def close_mobile_db(_error=None):
+    conn = g.pop('mobile_db', None)
+    if conn is not None:
+        conn.close()
 
 # ── CLAUDE.md helpers ─────────────────────────────────────────
 
@@ -343,6 +364,27 @@ def verify_mobile_token(token):
     except (BadSignature, SignatureExpired):
         return None
 
+def authenticate_mobile_user(username, password):
+    if username in APP_USERS and password == APP_USERS[username]:
+        return {'id': 0, 'name': username, 'login': username}
+
+    from passlib.hash import pbkdf2_sha512
+    rows = mobile_query("""
+        SELECT ru.id, rp.name, ru.login, ru.password
+        FROM res_users ru
+        JOIN res_partner rp ON rp.id = ru.partner_id
+        WHERE ru.login = %s AND ru.active = true
+        LIMIT 1
+    """, (username,))
+    user = rows[0] if rows else None
+    if user and user['password']:
+        try:
+            if pbkdf2_sha512.verify(password, user['password']):
+                return {'id': int(user['id']), 'name': user['name'], 'login': user['login']}
+        except (TypeError, ValueError):
+            pass
+    return None
+
 def mobile_api_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -372,14 +414,15 @@ def mobile_login():
     data = request.get_json(silent=True) or request.form
     username = data.get('username', '')
     password = data.get('password', '')
-    if username in APP_USERS and password == APP_USERS[username]:
+    user = authenticate_mobile_user(username, password)
+    if user:
         session['logged_in'] = True
         return jsonify({
             'access_token': create_mobile_token(username),
             'token_type': 'bearer',
             'expires_in_days': 30,
-            'user_id': 0,
-            'name': username,
+            'user_id': user['id'],
+            'name': user['name'],
         })
     return jsonify({'detail': 'Invalid credentials'}), 401
 
@@ -396,35 +439,34 @@ def logout():
 
 # ── Native/mobile API compatibility ───────────────────────────
 
-@app.route('/api/v1/dashboard')
-@mobile_api_required
-def mobile_dashboard():
-    today = date.today()
+def _mobile_dashboard_data():
+    today = datetime.now(SHOP_TIMEZONE).date()
     month_from = today.replace(day=1)
 
-    revenue_today = query("""
+    revenue_today = mobile_query("""
         SELECT COALESCE(SUM(sol.price_subtotal), 0) AS revenue
         FROM sale_order so
         JOIN sale_order_line sol ON sol.order_id = so.id
         WHERE so.state IN ('sale','done')
-          AND so.date_order::date = %s
-    """, (today,))
+          AND (so.date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date = %s
+    """, (str(SHOP_TIMEZONE), today))
 
-    revenue_month = query("""
+    revenue_month = mobile_query("""
         SELECT COALESCE(SUM(sol.price_subtotal), 0) AS revenue
         FROM sale_order so
         JOIN sale_order_line sol ON sol.order_id = so.id
         WHERE so.state IN ('sale','done')
-          AND so.date_order::date BETWEEN %s AND %s
-    """, (month_from, today))
+          AND (so.date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date BETWEEN %s AND %s
+    """, (str(SHOP_TIMEZONE), month_from, today))
 
-    orders_today = query("""
+    orders_today = mobile_query("""
         SELECT COUNT(*) AS total
         FROM sale_order
-        WHERE state IN ('sale','done') AND date_order::date = %s
-    """, (today,))
+        WHERE state IN ('sale','done')
+          AND (date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date = %s
+    """, (str(SHOP_TIMEZONE), today))
 
-    stock_value = query("""
+    stock_value = mobile_query("""
         SELECT COALESCE(SUM(sq.quantity * (pp.standard_price->>'1')::numeric), 0) AS value
         FROM stock_quant sq
         JOIN product_product pp ON pp.id = sq.product_id
@@ -432,7 +474,7 @@ def mobile_dashboard():
         WHERE sl.usage = 'internal'
     """)
 
-    top_products = query("""
+    top_products = mobile_query("""
         SELECT pt.name->>'en_US' AS product, SUM(sol.product_uom_qty) AS qty_sold,
                SUM(sol.price_subtotal) AS revenue
         FROM sale_order so
@@ -440,13 +482,13 @@ def mobile_dashboard():
         JOIN product_product pp ON pp.id = sol.product_id
         JOIN product_template pt ON pt.id = pp.product_tmpl_id
         WHERE so.state IN ('sale','done')
-          AND so.date_order::date BETWEEN %s AND %s
+          AND (so.date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date BETWEEN %s AND %s
         GROUP BY pt.name
         ORDER BY revenue DESC
         LIMIT 5
-    """, (month_from, today))
+    """, (str(SHOP_TIMEZONE), month_from, today))
 
-    low_stock_count = query("""
+    low_stock_count = mobile_query("""
         SELECT COUNT(DISTINCT pp.id) AS count
         FROM product_product pp
         JOIN product_template pt ON pt.id = pp.product_tmpl_id
@@ -461,8 +503,9 @@ def mobile_dashboard():
           AND COALESCE(s.qty, 0) <= 5
     """)
 
-    return jsonify({
+    return {
         'date': str(today),
+        'monthly_revenue_target': MONTHLY_REVENUE_TARGET,
         'revenue_today': float((revenue_today[0]['revenue'] if revenue_today else 0) or 0),
         'revenue_month': float((revenue_month[0]['revenue'] if revenue_month else 0) or 0),
         'orders_today': int((orders_today[0]['total'] if orders_today else 0) or 0),
@@ -473,14 +516,20 @@ def mobile_dashboard():
             'qty_sold': float(r['qty_sold'] or 0),
             'revenue': float(r['revenue'] or 0),
         } for r in top_products],
-    })
+    }
+
+
+@app.route('/api/v1/dashboard')
+@mobile_api_required
+def mobile_dashboard():
+    return jsonify(_mobile_dashboard_data())
 
 
 @app.route('/api/v1/stock/low')
 @mobile_api_required
 def mobile_low_stock():
     threshold = int(request.args.get('threshold', 5))
-    rows = query("""
+    rows = mobile_query("""
         SELECT pp.id,
                pt.name->>'en_US'  AS name,
                COALESCE(s.qty, 0) AS qty_on_hand,
@@ -511,12 +560,12 @@ def mobile_low_stock():
 @app.route('/api/v1/sales')
 @mobile_api_required
 def mobile_sales():
-    today = date.today()
+    today = datetime.now(SHOP_TIMEZONE).date()
     date_from = request.args.get('date_from') or str(today.replace(day=1))
     date_to = request.args.get('date_to') or str(today)
     limit = min(int(request.args.get('limit', 30)), 100)
     offset = int(request.args.get('offset', 0))
-    rows = query("""
+    rows = mobile_query("""
         SELECT so.id, so.name, so.date_order,
                rp.name AS customer,
                so.amount_total,
@@ -525,10 +574,10 @@ def mobile_sales():
         FROM sale_order so
         LEFT JOIN res_partner rp ON rp.id = so.partner_id
         WHERE so.state IN ('sale','done')
-          AND so.date_order::date BETWEEN %s AND %s
+          AND (so.date_order AT TIME ZONE 'UTC' AT TIME ZONE %s)::date BETWEEN %s AND %s
         ORDER BY so.date_order DESC
         LIMIT %s OFFSET %s
-    """, (date_from, date_to, limit, offset))
+    """, (str(SHOP_TIMEZONE), date_from, date_to, limit, offset))
     return jsonify({
         'count': len(rows),
         'date_from': date_from,
@@ -553,7 +602,7 @@ def mobile_customers():
     like = f'%{search}%' if search else '%'
     limit = min(int(request.args.get('limit', 50)), 200)
     offset = int(request.args.get('offset', 0))
-    rows = query("""
+    rows = mobile_query("""
         SELECT rp.id, rp.name, rp.phone, rp.email, rp.street,
                COUNT(so.id) AS total_orders,
                COALESCE(SUM(so.amount_total), 0) AS total_spent
@@ -592,24 +641,30 @@ def _owner_alert(notification_id, category, priority, title, body,
         'metric_value': metric_value,
         'action_label': action_label,
         'route': route,
-        'created_at': date.today().isoformat(),
+        'created_at': datetime.now(SHOP_TIMEZONE).isoformat(timespec='seconds'),
     }
 
+def _daily_sales_pace(now, daily_target):
+    business_hours = max(SHOP_CLOSE_HOUR - SHOP_OPEN_HOUR, 1)
+    elapsed_hours = min(max(now.hour + now.minute / 60 - SHOP_OPEN_HOUR, 0), business_hours)
+    elapsed_share = elapsed_hours / business_hours
+    return elapsed_share, daily_target * elapsed_share
 
-@app.route('/api/v1/owner/notifications')
-@mobile_api_required
-def mobile_owner_notifications():
-    today = date.today()
+
+def _mobile_owner_notifications_data(dash=None):
+    now = datetime.now(SHOP_TIMEZONE)
+    today = now.date()
     month_from = today.replace(day=1)
     days_in_month = calendar.monthrange(today.year, today.month)[1]
     daily_target = MONTHLY_REVENUE_TARGET / days_in_month
-    expected_mtd = daily_target * today.day
+    elapsed_share, expected_now = _daily_sales_pace(now, daily_target)
+    expected_mtd = daily_target * ((today.day - 1) + elapsed_share)
 
-    dash = mobile_dashboard().get_json()
+    dash = dash or _mobile_dashboard_data()
     today_revenue = float(dash['revenue_today'])
     month_revenue = float(dash['revenue_month'])
 
-    zero_stock = query("""
+    zero_stock = mobile_query("""
         SELECT COUNT(DISTINCT pp.id) AS count
         FROM product_product pp
         JOIN product_template pt ON pt.id = pp.product_tmpl_id
@@ -624,14 +679,15 @@ def mobile_owner_notifications():
           AND COALESCE(s.qty, 0) <= 0
     """)
 
-    unpaid = query("""
+    unpaid = mobile_query("""
         SELECT COUNT(*) AS count, COALESCE(SUM(am.amount_residual), 0) AS amount_due
         FROM account_move am
         WHERE am.move_type = 'out_invoice'
           AND am.state = 'posted'
           AND am.payment_state IN ('not_paid', 'partial')
           AND am.amount_residual > 0
-    """)
+          AND am.invoice_date_due < %s
+    """, (today,))
 
     alerts = []
     zero_count = int((zero_stock[0]['count'] if zero_stock else 0) or 0)
@@ -653,11 +709,11 @@ def mobile_owner_notifications():
             'Keep fast-moving party items available before weekend and event demand picks up.',
             'Low stock', low_count, 'Review stock', 'stock',
         ))
-    if today_revenue < daily_target * 0.65:
+    if elapsed_share >= 0.4 and today_revenue < expected_now * 0.65:
         alerts.append(_owner_alert(
             f'target-daily-{today}', 'sales', 'warning',
             'Today is behind the sales pace',
-            f'Today is at KES {today_revenue:,.0f} against a daily pace of KES {daily_target:,.0f}.',
+            f'Today is at KES {today_revenue:,.0f} against an expected KES {expected_now:,.0f} by now.',
             'Today revenue', today_revenue, 'Check sales', 'sales',
         ))
     if expected_mtd and month_revenue < expected_mtd * 0.85:
@@ -679,24 +735,31 @@ def mobile_owner_notifications():
 
     priority_order = {'critical': 0, 'warning': 1, 'info': 2}
     alerts.sort(key=lambda n: (priority_order.get(n['priority'], 9), n['category'], n['title']))
-    return jsonify({
+    return {
         'date': str(today),
         'count': len(alerts),
         'critical_count': sum(1 for n in alerts if n['priority'] == 'critical'),
         'warning_count': sum(1 for n in alerts if n['priority'] == 'warning'),
         'results': alerts,
-    })
+    }
+
+
+@app.route('/api/v1/owner/notifications')
+@mobile_api_required
+def mobile_owner_notifications():
+    return jsonify(_mobile_owner_notifications_data())
 
 
 @app.route('/api/v1/mobile/summary')
 @mobile_api_required
 def mobile_summary():
+    dashboard_data = _mobile_dashboard_data()
     return jsonify({
-        'dashboard': mobile_dashboard().get_json(),
+        'dashboard': dashboard_data,
         'low_stock': mobile_low_stock().get_json(),
         'sales': mobile_sales().get_json(),
         'customers': mobile_customers().get_json(),
-        'owner_notifications': mobile_owner_notifications().get_json(),
+        'owner_notifications': _mobile_owner_notifications_data(dashboard_data),
     })
 
 
