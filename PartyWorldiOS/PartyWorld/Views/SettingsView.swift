@@ -3,7 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
-    @Binding var showingSignIn: Bool
+    @State private var showingSignIn = false
 
     var body: some View {
         @Bindable var state = state
@@ -29,7 +29,6 @@ struct SettingsView: View {
                         if state.isSignedIn {
                             state.signOut()
                         } else {
-                            dismiss()
                             showingSignIn = true
                         }
                     } label: {
@@ -75,6 +74,10 @@ struct SettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(PWTheme.background)
+        }
+        .sheet(isPresented: $showingSignIn) {
+            SignInView()
+                .presentationDetents([.medium, .large])
         }
     }
 }

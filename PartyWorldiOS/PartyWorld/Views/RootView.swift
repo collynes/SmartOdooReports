@@ -39,7 +39,7 @@ struct RootView: View {
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView(showingSignIn: $showingSignIn)
+            SettingsView()
         }
         .task {
             await state.refresh()

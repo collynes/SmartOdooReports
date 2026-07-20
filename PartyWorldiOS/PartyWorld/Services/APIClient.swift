@@ -70,7 +70,7 @@ struct APIClient: Sendable {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 10
+        request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
