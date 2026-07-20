@@ -7,8 +7,21 @@ struct CustomersView: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(state.customers) { customer in
-                        CustomerRow(customer: customer)
+                    if state.customers.isEmpty {
+                        LiveDataEmptyState(
+                            hasLiveData: state.hasLiveData,
+                            liveSymbol: "person.2",
+                            liveTitle: "No customers yet",
+                            liveMessage: "Customers with confirmed sales will appear here.",
+                            waitingTitle: "Waiting for live data",
+                            waitingMessage: "Top customers will load after sign-in."
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    } else {
+                        ForEach(state.customers) { customer in
+                            CustomerRow(customer: customer)
+                        }
                     }
                 } header: {
                     Text("Top customers")
@@ -28,30 +41,21 @@ private struct CustomerRow: View {
     let customer: Customer
 
     var body: some View {
-        HStack(spacing: 12) {
+        BusinessListRow(
+            title: customer.name,
+            subtitle: "\(customer.totalOrders) orders"
+        ) {
             Text(initials)
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(PWTheme.lavender)
                 .frame(width: 40, height: 40)
                 .background(PWTheme.lavender.opacity(0.14))
                 .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(customer.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(PWTheme.ink)
-                Text("\(customer.totalOrders) orders")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
+        } trailing: {
             Text(Currency.kes(customer.totalSpent))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(PWTheme.ink)
         }
-        .padding(.vertical, 6)
     }
 
     private var initials: String {

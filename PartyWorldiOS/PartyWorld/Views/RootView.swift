@@ -3,10 +3,11 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppState.self) private var state
     @State private var showingSignIn = false
+    @State private var showingSettings = false
 
     var body: some View {
         TabView {
-            DashboardView(showingSignIn: $showingSignIn)
+            DashboardView(showingSignIn: $showingSignIn, showingSettings: $showingSettings)
                 .tabItem {
                     Label("Today", systemImage: "sun.max.fill")
                 }
@@ -31,16 +32,14 @@ struct RootView: View {
                 .tabItem {
                     Label("Customers", systemImage: "person.2.fill")
                 }
-
-            SettingsView(showingSignIn: $showingSignIn)
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
-                }
         }
         .tint(PWTheme.coral)
         .sheet(isPresented: $showingSignIn) {
             SignInView()
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(showingSignIn: $showingSignIn)
         }
         .task {
             await state.refresh()

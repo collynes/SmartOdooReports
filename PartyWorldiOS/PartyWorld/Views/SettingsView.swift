@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.dismiss) private var dismiss
     @Binding var showingSignIn: Bool
 
     var body: some View {
@@ -28,6 +29,7 @@ struct SettingsView: View {
                         if state.isSignedIn {
                             state.signOut()
                         } else {
+                            dismiss()
                             showingSignIn = true
                         }
                     } label: {
@@ -64,6 +66,13 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
             .scrollContentBackground(.hidden)
             .background(PWTheme.background)
         }

@@ -20,10 +20,13 @@ struct SalesView: View {
             .navigationTitle("Sales")
             .overlay {
                 if state.sales.isEmpty {
-                    EmptyStateView(
-                        symbol: "receipt",
-                        title: "No sales in this range",
-                        message: "Recent confirmed sales will appear here."
+                    LiveDataEmptyState(
+                        hasLiveData: state.hasLiveData,
+                        liveSymbol: "receipt",
+                        liveTitle: "No sales in this range",
+                        liveMessage: "Recent confirmed sales will appear here.",
+                        waitingTitle: "Waiting for live data",
+                        waitingMessage: "Recent confirmed sales will load after sign-in."
                     )
                     .padding()
                 }
@@ -36,29 +39,16 @@ private struct SaleRow: View {
     let sale: SaleOrder
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "bag.fill")
-                .foregroundStyle(PWTheme.mint)
-                .frame(width: 36, height: 36)
-                .background(PWTheme.mint.opacity(0.14))
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(sale.customer?.isEmpty == false ? sale.customer! : "Customer")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(PWTheme.ink)
-                Text("\(sale.name) · \(shortDate(sale.dateOrder))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
+        BusinessListRow(
+            title: sale.customer?.isEmpty == false ? sale.customer! : "Customer",
+            subtitle: "\(sale.name) · \(shortDate(sale.dateOrder))"
+        ) {
+            IconBadge(symbol: "bag.fill", tint: PWTheme.mint, size: 36)
+        } trailing: {
             Text(Currency.kes(sale.amountTotal))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(PWTheme.ink)
         }
-        .padding(.vertical, 6)
     }
 
     private func shortDate(_ value: String) -> String {

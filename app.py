@@ -688,6 +688,18 @@ def mobile_owner_notifications():
     })
 
 
+@app.route('/api/v1/mobile/summary')
+@mobile_api_required
+def mobile_summary():
+    return jsonify({
+        'dashboard': mobile_dashboard().get_json(),
+        'low_stock': mobile_low_stock().get_json(),
+        'sales': mobile_sales().get_json(),
+        'customers': mobile_customers().get_json(),
+        'owner_notifications': mobile_owner_notifications().get_json(),
+    })
+
+
 @app.route('/switch-env/<env>')
 @login_required
 def switch_env(env):

@@ -119,6 +119,22 @@ struct OwnerNotificationsResponse: Codable, Equatable {
     }
 }
 
+struct MobileSummaryResponse: Codable, Equatable {
+    let dashboard: DashboardSnapshot
+    let lowStock: PagedResponse<LowStockProduct>
+    let sales: PagedResponse<SaleOrder>
+    let customers: PagedResponse<Customer>
+    let ownerNotifications: OwnerNotificationsResponse
+
+    enum CodingKeys: String, CodingKey {
+        case dashboard
+        case lowStock = "low_stock"
+        case sales
+        case customers
+        case ownerNotifications = "owner_notifications"
+    }
+}
+
 struct OwnerAlert: Codable, Identifiable, Equatable {
     enum Priority: String, Codable {
         case critical

@@ -55,6 +55,10 @@ struct APIClient: Sendable {
         try await get(baseURL: baseURL, path: "/api/v1/owner/notifications", token: token)
     }
 
+    func mobileSummary(baseURL: URL, token: String) async throws -> MobileSummaryResponse {
+        try await get(baseURL: baseURL, path: "/api/v1/mobile/summary", token: token)
+    }
+
     private func get<T: Decodable>(baseURL: URL, path: String, token: String) async throws -> T {
         let request = try makeRequest(baseURL: baseURL, path: path, token: token)
         return try await send(request)
@@ -66,7 +70,7 @@ struct APIClient: Sendable {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 15
+        request.timeoutInterval = 10
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

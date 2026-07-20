@@ -8,10 +8,13 @@ struct StockView: View {
             List {
                 Section {
                     if state.lowStock.isEmpty {
-                        EmptyStateView(
-                            symbol: "checkmark.seal.fill",
-                            title: "Stock looks steady",
-                            message: "No low-stock items are showing right now."
+                        LiveDataEmptyState(
+                            hasLiveData: state.hasLiveData,
+                            liveSymbol: "checkmark.seal.fill",
+                            liveTitle: "Stock looks steady",
+                            liveMessage: "No low-stock items are showing right now.",
+                            waitingTitle: "Waiting for live data",
+                            waitingMessage: "Low-stock items will appear after sign-in."
                         )
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -48,28 +51,12 @@ private struct LowStockRow: View {
     let product: LowStockProduct
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(tint.opacity(0.15))
-                Image(systemName: product.qtyOnHand <= 0 ? "exclamationmark" : "shippingbox")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(tint)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(product.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(PWTheme.ink)
-                    .lineLimit(2)
-                Text(Currency.kes(product.salePrice))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
+        BusinessListRow(
+            title: product.name,
+            subtitle: Currency.kes(product.salePrice)
+        ) {
+            IconBadge(symbol: product.qtyOnHand <= 0 ? "exclamationmark" : "shippingbox", tint: tint, size: 42)
+        } trailing: {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(product.qtyOnHand, format: .number.precision(.fractionLength(0...1)))
                     .font(.headline.weight(.bold))
@@ -79,7 +66,6 @@ private struct LowStockRow: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 6)
     }
 
     private var tint: Color {

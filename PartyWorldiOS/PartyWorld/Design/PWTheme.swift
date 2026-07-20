@@ -87,3 +87,77 @@ struct EmptyStateView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
+
+struct IconBadge: View {
+    let symbol: String
+    let tint: Color
+    var size: CGFloat = 40
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.headline.weight(.semibold))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(tint.opacity(0.14))
+            .clipShape(Circle())
+    }
+}
+
+struct BusinessListRow<Leading: View, Trailing: View>: View {
+    let title: String
+    let subtitle: String
+    let leading: Leading
+    let trailing: Trailing
+
+    init(
+        title: String,
+        subtitle: String,
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            leading
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(PWTheme.ink)
+                    .lineLimit(2)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            trailing
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+struct LiveDataEmptyState: View {
+    let hasLiveData: Bool
+    let liveSymbol: String
+    let liveTitle: String
+    let liveMessage: String
+    let waitingTitle: String
+    let waitingMessage: String
+
+    var body: some View {
+        EmptyStateView(
+            symbol: hasLiveData ? liveSymbol : "wifi.slash",
+            title: hasLiveData ? liveTitle : waitingTitle,
+            message: hasLiveData ? liveMessage : waitingMessage
+        )
+    }
+}

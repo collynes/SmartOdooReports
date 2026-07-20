@@ -127,28 +127,50 @@ final class AppState {
         defer { isLoading = false }
 
         do {
-            async let dashboardResponse = api.dashboard(baseURL: baseURL, token: accessToken)
-            async let lowStockResponse = api.lowStock(baseURL: baseURL, token: accessToken)
-            async let salesResponse = api.sales(baseURL: baseURL, token: accessToken)
-            async let customersResponse = api.customers(baseURL: baseURL, token: accessToken)
-            async let ownerAlertsResponse = api.ownerNotifications(baseURL: baseURL, token: accessToken)
-
-            dashboard = try await dashboardResponse
-            lowStock = try await lowStockResponse.results
-            sales = try await salesResponse.results
-            customers = try await customersResponse.results
-            ownerAlerts = try await ownerAlertsResponse.results
-            lastUpdated = Date()
-            hasLiveData = true
-            notice = "Updated just now."
-            if notificationsEnabled {
-                await notificationCenter.postUrgentAlerts(ownerAlerts)
+            do {
+                let summary = try await api.mobileSummary(baseURL: baseURL, token: accessToken)
+                apply(summary)
+            } catch APIError.badResponse(404) {
+                try await loadLegacyEndpoints(baseURL: baseURL, token: accessToken)
             }
+
+            markRefreshComplete()
         } catch {
             if lastUpdated == nil {
                 resetBusinessData()
             }
             notice = error.localizedDescription
+        }
+    }
+
+    private func apply(_ summary: MobileSummaryResponse) {
+        dashboard = summary.dashboard
+        lowStock = summary.lowStock.results
+        sales = summary.sales.results
+        customers = summary.customers.results
+        ownerAlerts = summary.ownerNotifications.results
+    }
+
+    private func loadLegacyEndpoints(baseURL: URL, token: String) async throws {
+        async let dashboardResponse = api.dashboard(baseURL: baseURL, token: token)
+        async let lowStockResponse = api.lowStock(baseURL: baseURL, token: token)
+        async let salesResponse = api.sales(baseURL: baseURL, token: token)
+        async let customersResponse = api.customers(baseURL: baseURL, token: token)
+        async let ownerAlertsResponse = api.ownerNotifications(baseURL: baseURL, token: token)
+
+        dashboard = try await dashboardResponse
+        lowStock = try await lowStockResponse.results
+        sales = try await salesResponse.results
+        customers = try await customersResponse.results
+        ownerAlerts = try await ownerAlertsResponse.results
+    }
+
+    private func markRefreshComplete() {
+        lastUpdated = Date()
+        hasLiveData = true
+        notice = "Updated just now."
+        if notificationsEnabled {
+            Task { await notificationCenter.postUrgentAlerts(ownerAlerts) }
         }
     }
 

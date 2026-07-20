@@ -3,6 +3,7 @@ import SwiftUI
 struct DashboardView: View {
     @Environment(AppState.self) private var state
     @Binding var showingSignIn: Bool
+    @Binding var showingSettings: Bool
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -15,8 +16,7 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     hero
                     connectionBanner
-                    kpis
-                    targetCard
+                    ownerSnapshot
                     insights
                     topProducts
                 }
@@ -25,6 +25,15 @@ struct DashboardView: View {
             .background(PWTheme.background.ignoresSafeArea())
             .navigationTitle("Party World")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                    }
+                    .accessibilityLabel("Settings")
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Task { await state.refresh() }
@@ -35,6 +44,20 @@ struct DashboardView: View {
                     .accessibilityLabel("Refresh")
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var ownerSnapshot: some View {
+        if state.hasLiveData {
+            kpis
+            targetCard
+        } else {
+            EmptyStateView(
+                symbol: "chart.line.uptrend.xyaxis",
+                title: "Your owner snapshot is ready when you sign in",
+                message: "Revenue, orders, stock value, and target progress stay hidden until live data loads."
+            )
         }
     }
 
@@ -70,12 +93,7 @@ struct DashboardView: View {
         if state.hasLiveData == false {
             SoftCard {
                 HStack(alignment: .center, spacing: 14) {
-                    Image(systemName: "lock.open.fill")
-                        .font(.title3)
-                        .foregroundStyle(PWTheme.sky)
-                        .frame(width: 34, height: 34)
-                        .background(PWTheme.sky.opacity(0.14))
-                        .clipShape(Circle())
+                    IconBadge(symbol: "lock.open.fill", tint: PWTheme.sky, size: 34)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Sign in to load live data")
@@ -177,12 +195,7 @@ private struct MetricCard: View {
     var body: some View {
         SoftCard {
             VStack(alignment: .leading, spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.headline)
-                    .foregroundStyle(tint)
-                    .frame(width: 34, height: 34)
-                    .background(tint.opacity(0.14))
-                    .clipShape(Circle())
+                IconBadge(symbol: symbol, tint: tint, size: 34)
                 Text(value)
                     .font(.title3.weight(.bold))
                     .foregroundStyle(PWTheme.ink)
@@ -204,11 +217,7 @@ private struct InsightRow: View {
         let tint = PWTheme.tint(for: note.tone)
         SoftCard {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: note.symbol)
-                    .foregroundStyle(tint)
-                    .frame(width: 30, height: 30)
-                    .background(tint.opacity(0.14))
-                    .clipShape(Circle())
+                IconBadge(symbol: note.symbol, tint: tint, size: 30)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(note.title)

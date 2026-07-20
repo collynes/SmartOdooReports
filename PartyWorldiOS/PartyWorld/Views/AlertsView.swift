@@ -44,12 +44,11 @@ struct AlertsView: View {
 
         return SoftCard {
             HStack(spacing: 14) {
-                Image(systemName: critical > 0 ? "exclamationmark.triangle.fill" : "bell.fill")
-                    .font(.title3)
-                    .foregroundStyle(critical > 0 ? PWTheme.coral : PWTheme.sky)
-                    .frame(width: 42, height: 42)
-                    .background((critical > 0 ? PWTheme.coral : PWTheme.sky).opacity(0.14))
-                    .clipShape(Circle())
+                IconBadge(
+                    symbol: critical > 0 ? "exclamationmark.triangle.fill" : "bell.fill",
+                    tint: critical > 0 ? PWTheme.coral : PWTheme.sky,
+                    size: 42
+                )
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(summaryTitle(critical: critical, warning: warning))
@@ -83,12 +82,7 @@ private struct OwnerAlertRow: View {
         SoftCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: symbol)
-                        .font(.headline)
-                        .foregroundStyle(tint)
-                        .frame(width: 36, height: 36)
-                        .background(tint.opacity(0.14))
-                        .clipShape(Circle())
+                    IconBadge(symbol: symbol, tint: tint, size: 36)
 
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 8) {

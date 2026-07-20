@@ -796,6 +796,17 @@ def owner_notifications(user=Depends(current_user)):
     )
 
 
+@app.get('/api/v1/mobile/summary', tags=['Mobile'], summary='Single-call mobile owner summary')
+def mobile_summary(user=Depends(current_user)):
+    return {
+        'dashboard': dashboard(user=user),
+        'low_stock': low_stock(user=user),
+        'sales': sales(limit=30, user=user),
+        'customers': customers(limit=50, user=user),
+        'owner_notifications': owner_notifications(user=user),
+    }
+
+
 # ════════════════════════════════════════════════════════════════
 # POS
 # ════════════════════════════════════════════════════════════════
